@@ -5,6 +5,8 @@ import logging
 from types import TracebackType
 from typing import Self
 
+from shyam.capabilities.model import AvailabilityStatus, Capability
+from shyam.capabilities.registry import CapabilityRegistry
 from shyam.core.config import ShyamSettings
 from shyam.core.lifecycle import InvalidStateTransitionError, LifecycleState
 from shyam.core.logging import setup_logging
@@ -30,6 +32,7 @@ class ShyamRuntime:
         self.settings = settings or ShyamSettings()
         self.state = RuntimeState()
         self.events = EventBus()
+        self.capabilities = CapabilityRegistry(event_bus=self.events)
         self._lock = asyncio.Lock()
         setup_logging(self.settings)
 
@@ -74,6 +77,18 @@ class ShyamRuntime:
                         node_name=identity.node_name,
                         protocol_version=identity.protocol_version,
                     )
+                )
+
+                # Register default synthetic introspection capability (S3)
+                await self.capabilities.register(
+                    Capability(
+                        capability_id="shyam.runtime.inspect",
+                        name="Runtime Introspection",
+                        version="1.0.0",
+                        description="Inspect local Shyam node status, identity, and capabilities",
+                        availability=AvailabilityStatus.AVAILABLE,
+                    ),
+                    overwrite=True,
                 )
 
                 # Launch Local Discovery Service if enabled
