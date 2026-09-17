@@ -1,4 +1,4 @@
-"""Runtime configuration and settings for Shyam."""
+﻿"""Runtime configuration and settings for Shyam."""
 
 from pathlib import Path
 from typing import Literal
@@ -27,6 +27,24 @@ class ShyamSettings(BaseModel):
     runtime_name: str = Field(
         default="shyam-core",
         description="Human-readable identifier for this runtime instance.",
+    )
+
+    # Local Peer Discovery S2 Settings
+    discovery_enabled: bool = Field(
+        default=True,
+        description="Whether to enable local UDP peer discovery.",
+    )
+    discovery_port: int = Field(
+        default=54321,
+        description="Port for UDP local peer discovery broadcasts.",
+    )
+    discovery_interval: float = Field(
+        default=2.0,
+        description="Interval in seconds between peer announcement broadcasts.",
+    )
+    discovery_expiry: float = Field(
+        default=6.0,
+        description="Heartbeat duration before a peer node is marked as lost.",
     )
 
     model_config = {

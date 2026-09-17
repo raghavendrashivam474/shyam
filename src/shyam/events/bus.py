@@ -1,4 +1,4 @@
-"""In-process asynchronous event bus and event definitions for Shyam."""
+﻿"""In-process asynchronous event bus and event definitions for Shyam."""
 
 import asyncio
 import logging
@@ -37,23 +37,23 @@ class Event(BaseModel):
 
 
 T = TypeVar("T", bound=Event)
-EventHandler = Callable[[T], Coroutine[Any, Any, None]]
+EventHandler = Callable[[Any], Coroutine[Any, Any, None]]
 
 
 class EventBus:
-    """Asynchronous in-process pub/sub event dispatcher."""
+    """Asynchronous in-process pub/sub event dispatcher with Envelope awareness."""
 
     def __init__(self) -> None:
-        self._subscribers: dict[type[Event], list[EventHandler[Any]]] = defaultdict(list)
+        self._subscribers: dict[type, list[EventHandler]] = defaultdict(list)
         self._lock = asyncio.Lock()
 
-    async def subscribe(self, event_type: type[T], handler: EventHandler[T]) -> None:
-        """Register an asynchronous subscriber for a specific event type."""
+    async def subscribe(self, event_type: type, handler: EventHandler) -> None:
+        """Register an asynchronous subscriber for a specific event or envelope type."""
         async with self._lock:
             if handler not in self._subscribers[event_type]:
                 self._subscribers[event_type].append(handler)
 
-    async def unsubscribe(self, event_type: type[T], handler: EventHandler[T]) -> bool:
+    async def unsubscribe(self, event_type: type, handler: EventHandler) -> bool:
         """Unregister a subscriber for a specific event type. Returns True if removed."""
         async with self._lock:
             if handler in self._subscribers[event_type]:
@@ -61,32 +61,70 @@ class EventBus:
                 return True
             return False
 
-    async def publish(self, event: Event) -> None:
-        """Publish an event to all registered subscribers concurrently."""
-        event_type = type(event)
-        async with self._lock:
-            # Match exact type and superclasses (including base Event)
-            handlers: list[EventHandler[Any]] = []
-            for registered_type, registered_handlers in self._subscribers.items():
-                if issubclass(event_type, registered_type):
-                    handlers.extend(registered_handlers)
+    async def publish(self, event_or_envelope: Any) -> None:
+        """Publish an event or envelope to all registered subscribers concurrently."""
+        from shyam.events.envelope import EventEnvelope
 
-        if not handlers:
+        handlers_to_invoke: list[tuple[EventHandler, Any]] = []
+
+        async with self._lock:
+            if isinstance(event_or_envelope, EventEnvelope):
+                # 1. Dispatch envelope to subscribers of EventEnvelope
+                for registered_type, handlers in self._subscribers.items():
+                    if registered_type is EventEnvelope or (
+                        isinstance(registered_type, type)
+                        and issubclass(registered_type, EventEnvelope)
+                    ):
+                        for h in handlers:
+                            handlers_to_invoke.append((h, event_or_envelope))
+
+                # 2. Dispatch the inner payload to subscribers of that Event type
+                inner_event = event_or_envelope.payload
+                inner_event_type = type(inner_event)
+                for registered_type, handlers in self._subscribers.items():
+                    if isinstance(registered_type, type) and issubclass(
+                        inner_event_type, registered_type
+                    ):
+                        for h in handlers:
+                            handlers_to_invoke.append((h, inner_event))
+            else:
+                # Direct Event published
+                event_type = type(event_or_envelope)
+                # 1. Dispatch direct event to its subscribers
+                for registered_type, handlers in self._subscribers.items():
+                    if isinstance(registered_type, type) and issubclass(
+                        event_type, registered_type
+                    ):
+                        for h in handlers:
+                            handlers_to_invoke.append((h, event_or_envelope))
+
+                # 2. Automatically wrap in an EventEnvelope and dispatch to Envelope subscribers
+                wrapped_envelope = EventEnvelope.wrap(event_or_envelope)
+                for registered_type, handlers in self._subscribers.items():
+                    if registered_type is EventEnvelope or (
+                        isinstance(registered_type, type)
+                        and issubclass(registered_type, EventEnvelope)
+                    ):
+                        for h in handlers:
+                            handlers_to_invoke.append((h, wrapped_envelope))
+
+        if not handlers_to_invoke:
             return
 
         # Execute handlers concurrently, isolating exceptions
-        tasks = [self._safe_invoke(handler, event) for handler in handlers]
+        tasks = [self._safe_invoke(handler, msg) for handler, msg in handlers_to_invoke]
         await asyncio.gather(*tasks)
 
-    async def _safe_invoke(self, handler: EventHandler[Any], event: Event) -> None:
+    async def _safe_invoke(self, handler: EventHandler, msg: Any) -> None:
         """Safely invoke an event handler, preventing exceptions from propagating."""
         try:
-            await handler(event)
+            await handler(msg)
         except Exception as exc:  # noqa: BLE001
+            name = getattr(msg, "event_name", type(msg).__name__)
             logger.exception(
-                "Error in event handler %s for event %s: %s",
+                "Error in event handler %s for message %s: %s",
                 handler,
-                event.event_name,
+                name,
                 exc,
             )
 
