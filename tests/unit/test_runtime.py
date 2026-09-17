@@ -1,15 +1,20 @@
-"""Unit tests for ShyamRuntime."""
+﻿"""Unit tests for ShyamRuntime and S2 Integration."""
 
 import pytest
 
 from shyam.core.config import ShyamSettings
 from shyam.core.lifecycle import InvalidStateTransitionError, LifecycleState
 from shyam.core.runtime import ShyamRuntime
-from shyam.events.bus import RuntimeStartedEvent, RuntimeStoppedEvent, RuntimeStoppingEvent
+from shyam.discovery.model import NodeIdentityReadyEvent
+from shyam.events.bus import (
+    RuntimeStartedEvent,
+    RuntimeStoppedEvent,
+    RuntimeStoppingEvent,
+)
 
 
 @pytest.mark.asyncio
-async def test_runtime_lifecycle_start_and_stop(tmp_path):
+async def test_runtime_lifecycle_start_and_stop(tmp_path) -> None:
     """Verify clean start and stop transition cycle."""
     settings = ShyamSettings(data_directory=tmp_path / ".shyam")
     runtime = ShyamRuntime(settings=settings)
@@ -28,7 +33,7 @@ async def test_runtime_lifecycle_start_and_stop(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_runtime_emits_lifecycle_events(tmp_path):
+async def test_runtime_emits_lifecycle_events(tmp_path) -> None:
     """Verify runtime fires lifecycle events."""
     settings = ShyamSettings(data_directory=tmp_path / ".shyam")
     runtime = ShyamRuntime(settings=settings)
@@ -55,7 +60,7 @@ async def test_runtime_emits_lifecycle_events(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_runtime_stop_is_idempotent(tmp_path):
+async def test_runtime_stop_is_idempotent(tmp_path) -> None:
     """Verify calling stop() multiple times does not raise error."""
     settings = ShyamSettings(data_directory=tmp_path / ".shyam")
     runtime = ShyamRuntime(settings=settings)
@@ -70,7 +75,7 @@ async def test_runtime_stop_is_idempotent(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_runtime_cannot_start_twice(tmp_path):
+async def test_runtime_cannot_start_twice(tmp_path) -> None:
     """Verify starting an already running runtime raises InvalidStateTransitionError."""
     settings = ShyamSettings(data_directory=tmp_path / ".shyam")
     runtime = ShyamRuntime(settings=settings)
@@ -83,7 +88,7 @@ async def test_runtime_cannot_start_twice(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_runtime_async_context_manager(tmp_path):
+async def test_runtime_async_context_manager(tmp_path) -> None:
     """Verify runtime works seamlessly as an async context manager."""
     settings = ShyamSettings(data_directory=tmp_path / ".shyam")
 
@@ -91,3 +96,55 @@ async def test_runtime_async_context_manager(tmp_path):
         assert runtime.status == LifecycleState.RUNNING
 
     assert runtime.status == LifecycleState.STOPPED
+
+
+@pytest.mark.asyncio
+async def test_runtime_initializes_identity_and_discovery(tmp_path) -> None:
+    """Verify runtime loads identity and launches discovery cleanly on start."""
+    settings = ShyamSettings(
+        data_directory=tmp_path / ".shyam",
+        runtime_name="node-test-1",
+        discovery_port=58999,  # isolated port
+    )
+    runtime = ShyamRuntime(settings=settings)
+
+    identity_events = []
+
+    async def on_ident(e: NodeIdentityReadyEvent) -> None:
+        identity_events.append(e)
+
+    await runtime.events.subscribe(NodeIdentityReadyEvent, on_ident)
+
+    await runtime.start()
+
+    assert runtime.identity_manager is not None
+    assert runtime.discovery is not None
+    assert runtime.discovery._running is True
+
+    ident = runtime.identity_manager.identity
+    assert ident is not None
+    assert ident.node_name == "node-test-1"
+
+    assert len(identity_events) == 1
+    assert identity_events[0].node_id == ident.node_id
+
+    await runtime.stop()
+    assert runtime.discovery._running is False
+
+
+@pytest.mark.asyncio
+async def test_runtime_skips_discovery_when_disabled(tmp_path) -> None:
+    """Verify runtime skips discovery initializing when discovery_enabled is False."""
+    settings = ShyamSettings(
+        data_directory=tmp_path / ".shyam",
+        discovery_enabled=False,
+    )
+    runtime = ShyamRuntime(settings=settings)
+
+    await runtime.start()
+
+    assert runtime.identity_manager is not None
+    assert runtime.identity_manager.identity is not None
+    assert runtime.discovery is None
+
+    await runtime.stop()

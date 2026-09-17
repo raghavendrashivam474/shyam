@@ -1,4 +1,4 @@
-"""Shyam Core Runtime orchestrator."""
+﻿"""Shyam Core Runtime orchestrator."""
 
 import asyncio
 import logging
@@ -9,6 +9,8 @@ from shyam.core.config import ShyamSettings
 from shyam.core.lifecycle import InvalidStateTransitionError, LifecycleState
 from shyam.core.logging import setup_logging
 from shyam.core.state import RuntimeState
+from shyam.discovery.model import NodeIdentityReadyEvent
+from shyam.discovery.service import DiscoveryService
 from shyam.events.bus import (
     EventBus,
     RuntimeErrorEvent,
@@ -16,6 +18,7 @@ from shyam.events.bus import (
     RuntimeStoppedEvent,
     RuntimeStoppingEvent,
 )
+from shyam.identity.manager import IdentityManager
 
 logger = logging.getLogger("shyam.runtime")
 
@@ -29,6 +32,10 @@ class ShyamRuntime:
         self.events = EventBus()
         self._lock = asyncio.Lock()
         setup_logging(self.settings)
+
+        # Components initialized on start()
+        self.identity_manager: IdentityManager | None = None
+        self.discovery: DiscoveryService | None = None
 
     @property
     def status(self) -> LifecycleState:
@@ -52,6 +59,34 @@ class ShyamRuntime:
             try:
                 # Ensure local data directory exists
                 self.settings.data_directory.mkdir(parents=True, exist_ok=True)
+
+                # Initialize persistent node identity
+                self.identity_manager = IdentityManager(
+                    data_dir=self.settings.data_directory,
+                    custom_node_name=self.settings.runtime_name,
+                )
+                identity = self.identity_manager.get_or_create_identity()
+
+                # Publish S2 Identity Ready notification
+                await self.events.publish(
+                    NodeIdentityReadyEvent(
+                        node_id=identity.node_id,
+                        node_name=identity.node_name,
+                        protocol_version=identity.protocol_version,
+                    )
+                )
+
+                # Launch Local Discovery Service if enabled
+                if self.settings.discovery_enabled:
+                    self.discovery = DiscoveryService(
+                        identity_manager=self.identity_manager,
+                        event_bus=self.events,
+                        broadcast_port=self.settings.discovery_port,
+                        broadcast_interval=self.settings.discovery_interval,
+                        peer_expiry_interval=self.settings.discovery_expiry,
+                    )
+                    await self.discovery.start()
+
             except Exception as exc:
                 self.state.transition_to(LifecycleState.ERROR, error_detail=str(exc))
                 await self.events.publish(
@@ -77,6 +112,14 @@ class ShyamRuntime:
                 return
 
             logger.info("Stopping Shyam runtime [%s]...", self.state.runtime_id)
+
+            # Shutdown S2 Local Peer Discovery Service
+            if self.discovery:
+                try:
+                    await self.discovery.stop()
+                except Exception as exc:
+                    logger.exception("Failed to stop discovery service: %s", exc)
+
             if self.state.status != LifecycleState.ERROR:
                 self.state.transition_to(LifecycleState.STOPPING)
                 await self.events.publish(RuntimeStoppingEvent(runtime_id=self.state.runtime_id))
