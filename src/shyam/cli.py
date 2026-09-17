@@ -35,7 +35,7 @@ async def run_runtime(settings: ShyamSettings | None = None, duration: float | N
         ident = runtime.identity_manager.identity if runtime.identity_manager else None
         node_id_str = str(ident.node_id) if ident else "unknown"
         node_name_str = ident.node_name if ident else "unknown"
-        
+
         is_disc_active = bool(runtime.discovery and runtime.discovery._running)
         disc_status = "enabled" if is_disc_active else "disabled"
 
