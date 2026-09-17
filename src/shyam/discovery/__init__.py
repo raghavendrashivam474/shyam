@@ -7,6 +7,7 @@ from shyam.discovery.model import (
     PeerLostEvent,
     PeerUpdatedEvent,
 )
+from shyam.discovery.service import DiscoveryService
 
 __all__ = [
     "NodeIdentityReadyEvent",
@@ -14,4 +15,5 @@ __all__ = [
     "PeerDiscoveredEvent",
     "PeerLostEvent",
     "PeerUpdatedEvent",
+    "DiscoveryService",
 ]
