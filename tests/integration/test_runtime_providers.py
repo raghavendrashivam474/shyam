@@ -20,7 +20,9 @@ async def test_runtime_owns_provider_registry_and_propagates_events(tmp_path) ->
 
     async with ShyamRuntime(settings=settings) as runtime:
         assert hasattr(runtime, "providers")
-        assert runtime.providers.count == 0
+        # S5: fabric registers local.filesystem during start
+        assert runtime.providers.count == 1
+        assert runtime.providers.contains("local.filesystem")
 
         # Capture provider events on runtime event bus
         captured_events = []
@@ -30,23 +32,26 @@ async def test_runtime_owns_provider_registry_and_propagates_events(tmp_path) ->
 
         await runtime.events.subscribe(ProviderRegisteredEvent, on_provider_registered)
 
-        # Register synthetic provider
+        # Register synthetic provider with non-overlapping capabilities
         prov = Provider(
-            provider_id="local.fs",
-            name="Local Filesystem Provider",
+            provider_id="local.synthetic",
+            name="Synthetic Test Provider",
             version="1.0.0",
-            capabilities=("file.read", "file.write"),
+            capabilities=("test.synthetic.read", "test.synthetic.write"),
             availability=AvailabilityStatus.AVAILABLE,
         )
         await runtime.providers.register(prov)
 
-        assert runtime.providers.count == 1
-        assert runtime.providers.contains("local.fs")
+        assert runtime.providers.count == 2
+        assert runtime.providers.contains("local.synthetic")
         assert len(captured_events) == 1
-        assert captured_events[0].provider_id == "local.fs"
-        assert captured_events[0].provider.capabilities == ("file.read", "file.write")
+        assert captured_events[0].provider_id == "local.synthetic"
+        assert captured_events[0].provider.capabilities == (
+            "test.synthetic.read",
+            "test.synthetic.write",
+        )
 
         # Query provider by capability via runtime's provider registry
-        readers = runtime.providers.find_by_capability("file.read")
+        readers = runtime.providers.find_by_capability("test.synthetic.read")
         assert len(readers) == 1
-        assert readers[0].provider_id == "local.fs"
+        assert readers[0].provider_id == "local.synthetic"
