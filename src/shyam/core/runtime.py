@@ -21,6 +21,7 @@ from shyam.events.bus import (
     RuntimeStoppingEvent,
 )
 from shyam.identity.manager import IdentityManager
+from shyam.providers.fabric import LocalProviderFabric
 from shyam.providers.registry import ProviderRegistry
 
 logger = logging.getLogger("shyam.runtime")
@@ -35,6 +36,13 @@ class ShyamRuntime:
         self.events = EventBus()
         self.capabilities = CapabilityRegistry(event_bus=self.events)
         self.providers = ProviderRegistry(event_bus=self.events)
+
+        # Instantiate the Local Provider Fabric (S5)
+        self.provider_fabric = LocalProviderFabric(
+            capability_registry=self.capabilities,
+            provider_registry=self.providers,
+        )
+
         self._lock = asyncio.Lock()
         setup_logging(self.settings)
 
@@ -93,6 +101,10 @@ class ShyamRuntime:
                     overwrite=True,
                 )
 
+                # Start the local provider fabric (S5)
+                # This constructs and registers local providers like local.filesystem
+                await self.provider_fabric.start()
+
                 # Launch Local Discovery Service if enabled
                 if self.settings.discovery_enabled:
                     self.discovery = DiscoveryService(
@@ -129,6 +141,12 @@ class ShyamRuntime:
                 return
 
             logger.info("Stopping Shyam runtime [%s]...", self.state.runtime_id)
+
+            # Shutdown local provider fabric (S5)
+            try:
+                await self.provider_fabric.stop()
+            except Exception as exc:
+                logger.exception("Failed to stop provider fabric gracefully: %s", exc)
 
             # Shutdown S2 Local Peer Discovery Service
             if self.discovery:
