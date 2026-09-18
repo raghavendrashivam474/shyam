@@ -18,7 +18,7 @@ class ShyamSettings(BaseModel):
     )
     data_directory: Path = Field(
         default=Path.home() / ".shyam",
-        description="Local directory for runtime state, logs, and artifacts.",
+        description="Local directory for runtime state and logs.",
     )
     log_level: LogLevel = Field(
         default="INFO",
@@ -26,7 +26,7 @@ class ShyamSettings(BaseModel):
     )
     runtime_name: str = Field(
         default="shyam-core",
-        description="Human-readable identifier for this runtime instance.",
+        description="Human-readable identifier for this runtime.",
     )
 
     # Local Peer Discovery S2 Settings
@@ -40,11 +40,28 @@ class ShyamSettings(BaseModel):
     )
     discovery_interval: float = Field(
         default=2.0,
-        description="Interval in seconds between peer announcement broadcasts.",
+        description="Interval in seconds between peer broadcasts.",
     )
     discovery_expiry: float = Field(
         default=6.0,
-        description="Heartbeat duration before a peer node is marked as lost.",
+        description="Heartbeat duration before a peer is lost.",
+    )
+
+    # Zarya EIP-1 Integration S6 Settings
+    zarya_enabled: bool = Field(
+        default=True,
+        description="Attempt connection to local Zarya agent.",
+    )
+    zarya_url: str = Field(
+        default="http://127.0.0.1:8765/ecosystem/v1",
+        description="EIP-1 base URL for Zarya ecosystem endpoint.",
+    )
+    zarya_token: str | None = Field(
+        default=None,
+        description=(
+            "Auth token for Zarya EIP-1. "
+            "Falls back to ZARYA_ECOSYSTEM_TOKEN env var."
+        ),
     )
 
     model_config = {

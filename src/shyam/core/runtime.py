@@ -23,6 +23,7 @@ from shyam.events.bus import (
 from shyam.identity.manager import IdentityManager
 from shyam.providers.fabric import LocalProviderFabric
 from shyam.providers.registry import ProviderRegistry
+from shyam.providers.zarya.provider import ZaryaProvider
 
 logger = logging.getLogger("shyam.runtime")
 
@@ -41,6 +42,12 @@ class ShyamRuntime:
         self.provider_fabric = LocalProviderFabric(
             capability_registry=self.capabilities,
             provider_registry=self.providers,
+        )
+
+        # Instantiate the Zarya Provider Integration (S6)
+        self.zarya_provider = ZaryaProvider(
+            base_url=self.settings.zarya_url,
+            token=self.settings.zarya_token,
         )
 
         self._lock = asyncio.Lock()
@@ -64,23 +71,27 @@ class ShyamRuntime:
         """Initialize and start the Shyam runtime."""
         async with self._lock:
             if self.state.status != LifecycleState.CREATED:
-                raise InvalidStateTransitionError(self.state.status, LifecycleState.INITIALIZING)
+                raise InvalidStateTransitionError(
+                    self.state.status, LifecycleState.INITIALIZING,
+                )
 
-            logger.info("Initializing Shyam runtime [%s]...", self.state.runtime_id)
+            logger.info(
+                "Initializing Shyam runtime [%s]...",
+                self.state.runtime_id,
+            )
             self.state.transition_to(LifecycleState.INITIALIZING)
 
             try:
-                # Ensure local data directory exists
-                self.settings.data_directory.mkdir(parents=True, exist_ok=True)
+                self.settings.data_directory.mkdir(
+                    parents=True, exist_ok=True,
+                )
 
-                # Initialize persistent node identity
                 self.identity_manager = IdentityManager(
                     data_dir=self.settings.data_directory,
                     custom_node_name=self.settings.runtime_name,
                 )
                 identity = self.identity_manager.get_or_create_identity()
 
-                # Publish S2 Identity Ready notification
                 await self.events.publish(
                     NodeIdentityReadyEvent(
                         node_id=identity.node_id,
@@ -89,79 +100,132 @@ class ShyamRuntime:
                     )
                 )
 
-                # Register default synthetic introspection capability (S3)
                 await self.capabilities.register(
                     Capability(
                         capability_id="shyam.runtime.inspect",
                         name="Runtime Introspection",
                         version="1.0.0",
-                        description="Inspect local Shyam node status, identity, and capabilities",
+                        description=(
+                            "Inspect local Shyam node status, "
+                            "identity, and capabilities"
+                        ),
                         availability=AvailabilityStatus.AVAILABLE,
                     ),
                     overwrite=True,
                 )
 
                 # Start the local provider fabric (S5)
-                # This constructs and registers local providers like local.filesystem
                 await self.provider_fabric.start()
 
-                # Launch Local Discovery Service if enabled
+                # Connect to Zarya sovereign agent if enabled (S6)
+                if self.settings.zarya_enabled:
+                    connected = self.zarya_provider.connect()
+                    if connected:
+                        logger.info(
+                            "Integrated Zarya provider into runtime."
+                        )
+                        await self.providers.register(
+                            self.zarya_provider.descriptor,
+                            overwrite=True,
+                        )
+                        for cap in (
+                            self.zarya_provider.capability_definitions
+                        ):
+                            await self.capabilities.register(
+                                cap, overwrite=True,
+                            )
+                    else:
+                        logger.info(
+                            "Zarya not reachable at %s. "
+                            "Shyam continuing standalone.",
+                            self.settings.zarya_url,
+                        )
+
                 if self.settings.discovery_enabled:
                     self.discovery = DiscoveryService(
                         identity_manager=self.identity_manager,
                         event_bus=self.events,
                         broadcast_port=self.settings.discovery_port,
-                        broadcast_interval=self.settings.discovery_interval,
-                        peer_expiry_interval=self.settings.discovery_expiry,
+                        broadcast_interval=(
+                            self.settings.discovery_interval
+                        ),
+                        peer_expiry_interval=(
+                            self.settings.discovery_expiry
+                        ),
                     )
                     await self.discovery.start()
 
             except Exception as exc:
-                self.state.transition_to(LifecycleState.ERROR, error_detail=str(exc))
+                self.state.transition_to(
+                    LifecycleState.ERROR, error_detail=str(exc),
+                )
                 await self.events.publish(
-                    RuntimeErrorEvent(runtime_id=self.state.runtime_id, error=str(exc))
+                    RuntimeErrorEvent(
+                        runtime_id=self.state.runtime_id,
+                        error=str(exc),
+                    )
                 )
                 logger.exception(
-                    "Runtime initialization failed [%s]: %s", self.state.runtime_id, exc
+                    "Runtime init failed [%s]: %s",
+                    self.state.runtime_id, exc,
                 )
                 raise
 
             self.state.transition_to(LifecycleState.RUNNING)
             logger.info(
-                "Shyam runtime started [%s] in environment '%s'",
+                "Shyam runtime started [%s] in '%s'",
                 self.state.runtime_id,
                 self.settings.environment,
             )
-            await self.events.publish(RuntimeStartedEvent(runtime_id=self.state.runtime_id))
+            await self.events.publish(
+                RuntimeStartedEvent(
+                    runtime_id=self.state.runtime_id,
+                )
+            )
 
     async def stop(self) -> None:
-        """Gracefully stop the Shyam runtime. This operation is idempotent."""
+        """Gracefully stop the Shyam runtime. Idempotent."""
         async with self._lock:
             if self.state.status == LifecycleState.STOPPED:
                 return
 
-            logger.info("Stopping Shyam runtime [%s]...", self.state.runtime_id)
+            logger.info(
+                "Stopping Shyam runtime [%s]...",
+                self.state.runtime_id,
+            )
 
-            # Shutdown local provider fabric (S5)
             try:
                 await self.provider_fabric.stop()
             except Exception as exc:
-                logger.exception("Failed to stop provider fabric gracefully: %s", exc)
+                logger.exception(
+                    "Failed to stop provider fabric: %s", exc,
+                )
 
-            # Shutdown S2 Local Peer Discovery Service
             if self.discovery:
                 try:
                     await self.discovery.stop()
                 except Exception as exc:
-                    logger.exception("Failed to stop discovery service: %s", exc)
+                    logger.exception(
+                        "Failed to stop discovery: %s", exc,
+                    )
 
             if self.state.status != LifecycleState.ERROR:
                 self.state.transition_to(LifecycleState.STOPPING)
-                await self.events.publish(RuntimeStoppingEvent(runtime_id=self.state.runtime_id))
+                await self.events.publish(
+                    RuntimeStoppingEvent(
+                        runtime_id=self.state.runtime_id,
+                    )
+                )
 
             self.state.transition_to(LifecycleState.STOPPED)
-            logger.info("Shyam runtime stopped [%s]", self.state.runtime_id)
-            await self.events.publish(RuntimeStoppedEvent(runtime_id=self.state.runtime_id))
+            logger.info(
+                "Shyam runtime stopped [%s]", self.state.runtime_id,
+            )
+            await self.events.publish(
+                RuntimeStoppedEvent(
+                    runtime_id=self.state.runtime_id,
+                )
+            )
 
     async def __aenter__(self) -> Self:
         await self.start()
