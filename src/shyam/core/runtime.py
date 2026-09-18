@@ -21,6 +21,7 @@ from shyam.events.bus import (
     RuntimeStoppingEvent,
 )
 from shyam.identity.manager import IdentityManager
+from shyam.providers.registry import ProviderRegistry
 
 logger = logging.getLogger("shyam.runtime")
 
@@ -33,6 +34,7 @@ class ShyamRuntime:
         self.state = RuntimeState()
         self.events = EventBus()
         self.capabilities = CapabilityRegistry(event_bus=self.events)
+        self.providers = ProviderRegistry(event_bus=self.events)
         self._lock = asyncio.Lock()
         setup_logging(self.settings)
 
