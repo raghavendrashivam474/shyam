@@ -1,4 +1,4 @@
-﻿"""Shyam Providers subsystem - S4.
+"""Shyam Providers subsystem - S4.
 
 Provides formal provider modeling and local in-memory registry.
 """

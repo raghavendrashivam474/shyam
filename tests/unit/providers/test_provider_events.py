@@ -1,4 +1,4 @@
-﻿"""Unit tests for Shyam Provider events - S4."""
+"""Unit tests for Shyam Provider events - S4."""
 
 from shyam.capabilities.model import AvailabilityStatus
 from shyam.providers.events import (

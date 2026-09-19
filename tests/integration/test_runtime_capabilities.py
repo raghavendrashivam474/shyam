@@ -1,4 +1,4 @@
-﻿"""Integration test for ShyamRuntime capability subsystem."""
+"""Integration test for ShyamRuntime capability subsystem."""
 
 import tempfile
 from pathlib import Path
@@ -53,9 +53,7 @@ class TestRuntimeCapabilities:
                 assert "text.translate" in runtime.capabilities
 
                 # Query capabilities through runtime
-                available = runtime.capabilities.find(
-                    availability=AvailabilityStatus.AVAILABLE
-                )
+                available = runtime.capabilities.find(availability=AvailabilityStatus.AVAILABLE)
                 assert len(available) == 5
 
             # Post-stop: runtime stopped gracefully

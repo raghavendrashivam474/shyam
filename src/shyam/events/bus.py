@@ -1,4 +1,4 @@
-﻿"""In-process asynchronous event bus and event definitions for Shyam."""
+"""In-process asynchronous event bus and event definitions for Shyam."""
 
 import asyncio
 import logging

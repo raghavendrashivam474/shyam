@@ -1,4 +1,4 @@
-﻿"""Unit tests for Node Identity models and IdentityManager."""
+"""Unit tests for Node Identity models and IdentityManager."""
 
 from pathlib import Path
 from uuid import UUID

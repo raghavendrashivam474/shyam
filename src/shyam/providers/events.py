@@ -1,4 +1,4 @@
-﻿"""Domain events for the Shyam Provider subsystem."""
+"""Domain events for the Shyam Provider subsystem."""
 
 from __future__ import annotations
 

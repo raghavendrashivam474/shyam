@@ -1,4 +1,4 @@
-﻿"""Unit tests for Capability domain events and EventEnvelope integration."""
+"""Unit tests for Capability domain events and EventEnvelope integration."""
 
 from shyam.capabilities.events import (
     CapabilityRegisteredEvent,

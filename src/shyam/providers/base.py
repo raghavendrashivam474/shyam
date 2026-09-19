@@ -1,4 +1,4 @@
-﻿"""Local Provider implementation contract - S5.
+"""Local Provider implementation contract - S5.
 
 Defines the minimal interface that concrete local providers must satisfy.
 A LocalProvider owns a descriptor (the frozen Provider model) and may

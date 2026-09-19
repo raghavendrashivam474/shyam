@@ -1,1 +1,1 @@
-﻿"""Shyam local provider implementations - S5."""
+"""Shyam local provider implementations - S5."""

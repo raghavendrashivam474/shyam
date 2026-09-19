@@ -1,4 +1,4 @@
-﻿"""Command-line interface for starting and managing Shyam runtime."""
+"""Command-line interface for starting and managing Shyam runtime."""
 
 import asyncio
 import logging

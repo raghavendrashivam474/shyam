@@ -77,3 +77,7 @@ desktop.ini
 # Logs
 *.log
 logs/
+
+# S7 baseline scratch files (local only)
+s6_baseline_test_results.txt
+s7_baseline_record.txt

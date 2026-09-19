@@ -1,4 +1,4 @@
-﻿"""Shyam Capability Model - S3.
+"""Shyam Capability Model - S3.
 
 Defines the formal representation of what a Shyam node can provide.
 A capability describes an *ability*, not an implementation.
@@ -61,14 +61,10 @@ class Capability(BaseModel):
     def validate_capability_id(cls, v: str) -> str:
         """Capability IDs must be namespaced dot-separated identifiers."""
         if not v or "." not in v:
-            raise ValueError(
-                f"Capability ID must be namespaced (e.g. 'file.read'), got: '{v}'"
-            )
+            raise ValueError(f"Capability ID must be namespaced (e.g. 'file.read'), got: '{v}'")
         parts = v.split(".")
         if any(not part.isidentifier() for part in parts):
-            raise ValueError(
-                f"Capability ID parts must be valid identifiers, got: '{v}'"
-            )
+            raise ValueError(f"Capability ID parts must be valid identifiers, got: '{v}'")
         return v
 
     @field_validator("version")
@@ -77,12 +73,8 @@ class Capability(BaseModel):
         """Version must be 1-3 dot-separated non-negative integers."""
         parts = v.split(".")
         if len(parts) < 1 or len(parts) > 3:
-            raise ValueError(
-                f"Version must be 1-3 dot-separated integers, got: '{v}'"
-            )
+            raise ValueError(f"Version must be 1-3 dot-separated integers, got: '{v}'")
         for part in parts:
             if not part.isdigit():
-                raise ValueError(
-                    f"Version parts must be non-negative integers, got: '{v}'"
-                )
+                raise ValueError(f"Version parts must be non-negative integers, got: '{v}'")
         return v

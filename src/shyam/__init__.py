@@ -1,4 +1,4 @@
-﻿"""Shyam: Local-first, decentralized personal computing ecosystem and orchestration layer."""
+"""Shyam: Local-first, decentralized personal computing ecosystem and orchestration layer."""
 
 from shyam.core.config import ShyamSettings
 from shyam.core.lifecycle import LifecycleState

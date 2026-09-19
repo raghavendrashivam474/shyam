@@ -1,4 +1,4 @@
-﻿"""Unit tests for LocalProviderFabric - S5."""
+"""Unit tests for LocalProviderFabric - S5."""
 
 import pytest
 
@@ -86,7 +86,9 @@ async def test_fabric_marks_failed_provider_unavailable() -> None:
     cap_reg = CapabilityRegistry()
     prov_reg = ProviderRegistry()
     fabric = LocalProviderFabric(
-        cap_reg, prov_reg, providers=[_FailingProvider()],
+        cap_reg,
+        prov_reg,
+        providers=[_FailingProvider()],
     )
 
     await fabric.start()
@@ -118,7 +120,9 @@ async def test_fabric_stop_survives_shutdown_errors() -> None:
     cap_reg = CapabilityRegistry()
     prov_reg = ProviderRegistry()
     fabric = LocalProviderFabric(
-        cap_reg, prov_reg, providers=[_ShutdownExplodingProvider()],
+        cap_reg,
+        prov_reg,
+        providers=[_ShutdownExplodingProvider()],
     )
 
     await fabric.start()

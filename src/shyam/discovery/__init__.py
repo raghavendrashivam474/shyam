@@ -1,4 +1,4 @@
-﻿"""Local peer discovery subsystem for Shyam."""
+"""Local peer discovery subsystem for Shyam."""
 
 from shyam.discovery.model import (
     NodeIdentityReadyEvent,

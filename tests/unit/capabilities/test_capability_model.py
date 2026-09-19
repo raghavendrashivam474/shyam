@@ -1,4 +1,4 @@
-﻿"""Unit tests for Shyam Capability domain model."""
+"""Unit tests for Shyam Capability domain model."""
 
 import pytest
 from pydantic import ValidationError

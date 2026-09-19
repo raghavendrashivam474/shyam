@@ -1,4 +1,4 @@
-﻿"""In-memory Provider Registry for local node providers."""
+"""In-memory Provider Registry for local node providers."""
 
 from __future__ import annotations
 
@@ -110,17 +110,13 @@ class ProviderRegistry:
             ProviderNotFoundError: If the provider is not registered.
         """
         if provider_id not in self._providers:
-            raise ProviderNotFoundError(
-                f"Cannot unregister non-existent provider '{provider_id}'."
-            )
+            raise ProviderNotFoundError(f"Cannot unregister non-existent provider '{provider_id}'.")
 
         prov = self._providers.pop(provider_id)
         logger.info("Unregistered provider: %s", provider_id)
 
         if self._event_bus:
-            await self._event_bus.publish(
-                ProviderUnregisteredEvent(provider_id=provider_id)
-            )
+            await self._event_bus.publish(ProviderUnregisteredEvent(provider_id=provider_id))
 
         return prov
 
@@ -165,8 +161,4 @@ class ProviderRegistry:
         Returns:
             List of Provider instances that list capability_id in their capabilities.
         """
-        return [
-            prov
-            for prov in self._providers.values()
-            if capability_id in prov.capabilities
-        ]
+        return [prov for prov in self._providers.values() if capability_id in prov.capabilities]

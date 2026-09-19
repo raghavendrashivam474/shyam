@@ -1,4 +1,4 @@
-﻿"""Unit tests for Shyam Provider Registry - S4."""
+"""Unit tests for Shyam Provider Registry - S4."""
 
 import pytest
 

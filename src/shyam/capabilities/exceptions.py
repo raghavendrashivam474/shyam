@@ -1,4 +1,4 @@
-﻿"""Exceptions for the Shyam Capability subsystem."""
+"""Exceptions for the Shyam Capability subsystem."""
 
 
 class CapabilityError(Exception):

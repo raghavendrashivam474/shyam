@@ -1,4 +1,4 @@
-﻿"""Integration test demonstrating peer discovery and loss between two Shyam nodes."""
+"""Integration test demonstrating peer discovery and loss between two Shyam nodes."""
 
 import asyncio
 from pathlib import Path
@@ -27,7 +27,7 @@ async def test_two_nodes_mutual_discovery_and_peer_loss(tmp_path: Path) -> None:
         discovery_enabled=True,
         discovery_port=shared_port,
         discovery_interval=0.1,  # Rapid announcement for testing
-        discovery_expiry=0.4,    # Fast expiry threshold
+        discovery_expiry=0.4,  # Fast expiry threshold
     )
 
     # Node B Configuration

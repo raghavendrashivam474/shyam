@@ -1,4 +1,4 @@
-﻿"""Shyam node identity subsystem."""
+"""Shyam node identity subsystem."""
 
 from shyam.identity.manager import (
     IdentityCorruptionError,

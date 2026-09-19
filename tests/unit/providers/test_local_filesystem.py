@@ -1,4 +1,4 @@
-﻿"""Unit tests for LocalFilesystemProvider - S5."""
+"""Unit tests for LocalFilesystemProvider - S5."""
 
 import pytest
 from pydantic import ValidationError
