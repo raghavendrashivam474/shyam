@@ -107,21 +107,29 @@ class FluxClient:
         return {}  # pragma: no cover
 
     def _handle_http_error(self, e: urllib.error.HTTPError) -> None:
-        """Parse HTTP errors into typed Flux exceptions."""
+        """Parse HTTP errors into typed Flux exceptions.
+
+        Handles both nested Gateway responses {"error": {"code": ...}}
+        and flat payloads {"code": ...}, case-insensitively.
+        """
         try:
             err_bytes = e.read()
             err_json = json.loads(err_bytes.decode("utf-8"))
-            code = err_json.get("code", "unknown")
-            message = err_json.get("message", str(e))
+            inner = err_json.get("error", err_json) if isinstance(err_json, dict) else {}
+            code = str(inner.get("code", "unknown")).lower()
+            message = inner.get("message", str(e))
+            detail = inner.get("detail") or {}
         except Exception:
             code = "unknown"
             message = f"HTTP {e.code}: {e.reason}"
+            detail = {}
 
         if e.code == 404 and "peer" in code:
-            raise FluxPeerNotFoundError(err_json.get("detail", {}).get("peer_id", "unknown")) from e
+            peer_id = detail.get("peer_id", "unknown") if isinstance(detail, dict) else "unknown"
+            raise FluxPeerNotFoundError(peer_id) from e
         elif e.code == 409 and "protocol" in code:
             raise FluxProtocolError(message) from e
-        elif e.code == 503:
+        elif e.code == 503 or (e.code == 500 and "not_ready" in code):
             raise FluxUnavailableError(message) from e
         elif "transfer" in code:
             raise FluxTransferError(message) from e
@@ -130,7 +138,7 @@ class FluxClient:
                 message,
                 code=code,
                 http_status=e.code,
-                detail=err_json if "err_json" in dir() else None,
+                detail=detail if isinstance(detail, dict) else None,
             ) from e
 
     # ── Gateway API v1 Methods ───────────────────────────────────
@@ -171,9 +179,7 @@ class FluxClient:
         """POST /flux/v1/transfer"""
         req = FluxTransferRequest(
             peer_id=peer_id,
-            artifact_path=artifact_path,
-            artifact_name=artifact_name,
-            is_directory=is_directory,
+            file_paths=[artifact_path],
         )
         data = self._request("POST", "/transfer", data=req.model_dump())
         return FluxTransferResponse.model_validate(data)
