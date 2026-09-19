@@ -1,4 +1,4 @@
-﻿"""Node identity persistence and lifecycle manager."""
+"""Node identity persistence and lifecycle manager."""
 
 import json
 import logging

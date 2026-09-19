@@ -1,4 +1,4 @@
-﻿"""Unit tests for Shyam CapabilityRegistry."""
+"""Unit tests for Shyam CapabilityRegistry."""
 
 import pytest
 
@@ -57,9 +57,7 @@ class TestCapabilityRegistry:
         assert registry.get("missing.cap") is None
         assert not registry.contains("missing.cap")
 
-    async def test_duplicate_registration_raises(
-        self, registry: CapabilityRegistry
-    ) -> None:
+    async def test_duplicate_registration_raises(self, registry: CapabilityRegistry) -> None:
         """Duplicate registration without overwrite=True raises DuplicateCapabilityError."""
         cap1 = Capability(capability_id="file.read", name="Read V1")
         cap2 = Capability(capability_id="file.read", name="Read V2")
@@ -71,9 +69,7 @@ class TestCapabilityRegistry:
         # Value should remain unchanged
         assert registry.get("file.read") == cap1
 
-    async def test_overwrite_registration_succeeds(
-        self, registry: CapabilityRegistry
-    ) -> None:
+    async def test_overwrite_registration_succeeds(self, registry: CapabilityRegistry) -> None:
         """Registration with overwrite=True replaces existing capability."""
         cap1 = Capability(capability_id="file.read", name="Read V1")
         cap2 = Capability(capability_id="file.read", name="Read V2", version="2.0.0")
@@ -94,9 +90,7 @@ class TestCapabilityRegistry:
         assert registry.count == 0
         assert not registry.contains("file.read")
 
-    async def test_unregister_nonexistent_raises(
-        self, registry: CapabilityRegistry
-    ) -> None:
+    async def test_unregister_nonexistent_raises(self, registry: CapabilityRegistry) -> None:
         """Unregistering a nonexistent capability raises CapabilityNotFoundError."""
         with pytest.raises(CapabilityNotFoundError):
             await registry.unregister("does.not.exist")

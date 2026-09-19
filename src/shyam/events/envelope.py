@@ -1,4 +1,4 @@
-﻿"""Transport-neutral event envelope for distributed boundaries."""
+"""Transport-neutral event envelope for distributed boundaries."""
 
 import uuid
 from datetime import UTC, datetime

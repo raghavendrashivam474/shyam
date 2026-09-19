@@ -1,4 +1,4 @@
-﻿"""Node identity models for Shyam."""
+"""Node identity models for Shyam."""
 
 from datetime import UTC, datetime
 from uuid import UUID, uuid4

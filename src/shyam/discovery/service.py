@@ -1,4 +1,4 @@
-﻿"""Asynchronous UDP-based Local Peer Discovery Service for Shyam."""
+"""Asynchronous UDP-based Local Peer Discovery Service for Shyam."""
 
 import asyncio
 import json

@@ -1,4 +1,4 @@
-﻿"""Runtime configuration and settings for Shyam."""
+"""Runtime configuration and settings for Shyam."""
 
 from pathlib import Path
 from typing import Literal
@@ -58,10 +58,17 @@ class ShyamSettings(BaseModel):
     )
     zarya_token: str | None = Field(
         default=None,
-        description=(
-            "Auth token for Zarya EIP-1. "
-            "Falls back to ZARYA_ECOSYSTEM_TOKEN env var."
-        ),
+        description=("Auth token for Zarya EIP-1. Falls back to ZARYA_ECOSYSTEM_TOKEN env var."),
+    )
+
+    # Flux Gateway Integration S7 Settings
+    flux_enabled: bool = Field(
+        default=True,
+        description="Attempt connection to local Flux Gateway.",
+    )
+    flux_url: str = Field(
+        default="http://127.0.0.1:9100/flux/v1",
+        description="Flux Gateway API base URL.",
     )
 
     model_config = {

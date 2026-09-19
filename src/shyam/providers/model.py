@@ -1,4 +1,4 @@
-﻿"""Shyam Provider Model - S4.
+"""Shyam Provider Model - S4.
 
 Defines the formal representation of who/how provides a capability.
 A provider describes metadata and capability association, not execution.
@@ -63,9 +63,7 @@ class Provider(BaseModel):
             )
         parts = v.split(".")
         if any(not part.isidentifier() for part in parts):
-            raise ValueError(
-                f"Provider ID parts must be valid identifiers, got: '{v}'"
-            )
+            raise ValueError(f"Provider ID parts must be valid identifiers, got: '{v}'")
         return v
 
     @field_validator("version")
@@ -74,12 +72,8 @@ class Provider(BaseModel):
         """Version must be 1-3 dot-separated non-negative integers."""
         parts = v.split(".")
         if len(parts) < 1 or len(parts) > 3:
-            raise ValueError(
-                f"Version must be 1-3 dot-separated integers, got: '{v}'"
-            )
+            raise ValueError(f"Version must be 1-3 dot-separated integers, got: '{v}'")
         for part in parts:
             if not part.isdigit():
-                raise ValueError(
-                    f"Version parts must be non-negative integers, got: '{v}'"
-                )
+                raise ValueError(f"Version parts must be non-negative integers, got: '{v}'")
         return v

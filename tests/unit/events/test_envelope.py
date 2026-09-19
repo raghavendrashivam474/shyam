@@ -1,4 +1,4 @@
-﻿"""Unit tests for EventEnvelope and Envelope-aware EventBus."""
+"""Unit tests for EventEnvelope and Envelope-aware EventBus."""
 
 import pytest
 

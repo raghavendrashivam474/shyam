@@ -1,4 +1,4 @@
-﻿"""Unit tests for ShyamRuntime and S2 Integration."""
+"""Unit tests for ShyamRuntime and S2 Integration."""
 
 import pytest
 

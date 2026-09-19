@@ -1,4 +1,4 @@
-﻿"""Event handling and dispatching infrastructure."""
+"""Event handling and dispatching infrastructure."""
 
 from shyam.events.bus import (
     Event,

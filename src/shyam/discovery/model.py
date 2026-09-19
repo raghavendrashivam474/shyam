@@ -1,4 +1,4 @@
-﻿"""Discovery models and peer representations for Shyam."""
+"""Discovery models and peer representations for Shyam."""
 
 from datetime import UTC, datetime
 from typing import Any

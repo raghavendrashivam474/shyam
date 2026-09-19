@@ -1,4 +1,4 @@
-﻿"""Local Filesystem Provider - S5.
+"""Local Filesystem Provider - S5.
 
 Represents the local machine's filesystem as a Shyam provider.
 This provider advertises file-related capabilities but does NOT

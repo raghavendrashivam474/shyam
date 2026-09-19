@@ -1,4 +1,4 @@
-﻿"""Unit tests for Discovery models and discovery events."""
+"""Unit tests for Discovery models and discovery events."""
 
 from datetime import UTC, datetime
 from uuid import uuid4

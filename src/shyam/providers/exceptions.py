@@ -1,4 +1,4 @@
-﻿"""Exceptions for the Shyam Provider subsystem."""
+"""Exceptions for the Shyam Provider subsystem."""
 
 
 class ProviderError(Exception):

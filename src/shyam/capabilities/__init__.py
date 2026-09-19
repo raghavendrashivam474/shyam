@@ -1,4 +1,4 @@
-﻿"""Shyam Capabilities subsystem - S3.
+"""Shyam Capabilities subsystem - S3.
 
 Provides formal capability modeling and local in-memory registry.
 """

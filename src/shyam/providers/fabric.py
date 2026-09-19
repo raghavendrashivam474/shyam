@@ -1,4 +1,4 @@
-﻿"""Shyam Local Provider Fabric - S5.
+"""Shyam Local Provider Fabric - S5.
 
 Manages the lifecycle, construction, validation, and registration
 of concrete local providers on the current Shyam node.
@@ -100,7 +100,9 @@ class LocalProviderFabric:
                 logger.debug("Shut down provider '%s'", prov_id)
             except Exception as exc:  # noqa: BLE001
                 logger.exception(
-                    "Error shutting down provider '%s': %s", prov_id, exc,
+                    "Error shutting down provider '%s': %s",
+                    prov_id,
+                    exc,
                 )
         self._instances.clear()
         logger.info("Local provider fabric stopped")

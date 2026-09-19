@@ -1,4 +1,4 @@
-﻿"""Integration tests for ShyamRuntime and LocalProviderFabric - S5."""
+"""Integration tests for ShyamRuntime and LocalProviderFabric - S5."""
 
 from pathlib import Path
 

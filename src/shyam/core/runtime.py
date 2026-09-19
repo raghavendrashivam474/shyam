@@ -1,4 +1,4 @@
-﻿"""Shyam Core Runtime orchestrator."""
+"""Shyam Core Runtime orchestrator."""
 
 import asyncio
 import logging
@@ -22,6 +22,7 @@ from shyam.events.bus import (
 )
 from shyam.identity.manager import IdentityManager
 from shyam.providers.fabric import LocalProviderFabric
+from shyam.providers.flux.provider import FluxProvider
 from shyam.providers.registry import ProviderRegistry
 from shyam.providers.zarya.provider import ZaryaProvider
 
@@ -50,6 +51,11 @@ class ShyamRuntime:
             token=self.settings.zarya_token,
         )
 
+        # Instantiate the Flux Provider Integration (S7)
+        self.flux_provider = FluxProvider(
+            base_url=self.settings.flux_url,
+        )
+
         self._lock = asyncio.Lock()
         setup_logging(self.settings)
 
@@ -72,7 +78,8 @@ class ShyamRuntime:
         async with self._lock:
             if self.state.status != LifecycleState.CREATED:
                 raise InvalidStateTransitionError(
-                    self.state.status, LifecycleState.INITIALIZING,
+                    self.state.status,
+                    LifecycleState.INITIALIZING,
                 )
 
             logger.info(
@@ -83,7 +90,8 @@ class ShyamRuntime:
 
             try:
                 self.settings.data_directory.mkdir(
-                    parents=True, exist_ok=True,
+                    parents=True,
+                    exist_ok=True,
                 )
 
                 self.identity_manager = IdentityManager(
@@ -105,10 +113,7 @@ class ShyamRuntime:
                         capability_id="shyam.runtime.inspect",
                         name="Runtime Introspection",
                         version="1.0.0",
-                        description=(
-                            "Inspect local Shyam node status, "
-                            "identity, and capabilities"
-                        ),
+                        description=("Inspect local Shyam node status, identity, and capabilities"),
                         availability=AvailabilityStatus.AVAILABLE,
                     ),
                     overwrite=True,
@@ -121,24 +126,40 @@ class ShyamRuntime:
                 if self.settings.zarya_enabled:
                     connected = self.zarya_provider.connect()
                     if connected:
-                        logger.info(
-                            "Integrated Zarya provider into runtime."
-                        )
+                        logger.info("Integrated Zarya provider into runtime.")
                         await self.providers.register(
                             self.zarya_provider.descriptor,
                             overwrite=True,
                         )
-                        for cap in (
-                            self.zarya_provider.capability_definitions
-                        ):
+                        for cap in self.zarya_provider.capability_definitions:
                             await self.capabilities.register(
-                                cap, overwrite=True,
+                                cap,
+                                overwrite=True,
                             )
                     else:
                         logger.info(
-                            "Zarya not reachable at %s. "
-                            "Shyam continuing standalone.",
+                            "Zarya not reachable at %s. Shyam continuing standalone.",
                             self.settings.zarya_url,
+                        )
+
+                # Connect to Flux connectivity gateway if enabled (S7)
+                if self.settings.flux_enabled:
+                    connected = self.flux_provider.connect()
+                    if connected:
+                        logger.info("Integrated Flux provider into runtime.")
+                        await self.providers.register(
+                            self.flux_provider.descriptor,
+                            overwrite=True,
+                        )
+                        for cap in self.flux_provider.capability_definitions:
+                            await self.capabilities.register(
+                                cap,
+                                overwrite=True,
+                            )
+                    else:
+                        logger.info(
+                            "Flux not reachable at %s. Shyam continuing standalone.",
+                            self.settings.flux_url,
                         )
 
                 if self.settings.discovery_enabled:
@@ -146,18 +167,15 @@ class ShyamRuntime:
                         identity_manager=self.identity_manager,
                         event_bus=self.events,
                         broadcast_port=self.settings.discovery_port,
-                        broadcast_interval=(
-                            self.settings.discovery_interval
-                        ),
-                        peer_expiry_interval=(
-                            self.settings.discovery_expiry
-                        ),
+                        broadcast_interval=(self.settings.discovery_interval),
+                        peer_expiry_interval=(self.settings.discovery_expiry),
                     )
                     await self.discovery.start()
 
             except Exception as exc:
                 self.state.transition_to(
-                    LifecycleState.ERROR, error_detail=str(exc),
+                    LifecycleState.ERROR,
+                    error_detail=str(exc),
                 )
                 await self.events.publish(
                     RuntimeErrorEvent(
@@ -167,7 +185,8 @@ class ShyamRuntime:
                 )
                 logger.exception(
                     "Runtime init failed [%s]: %s",
-                    self.state.runtime_id, exc,
+                    self.state.runtime_id,
+                    exc,
                 )
                 raise
 
@@ -198,7 +217,8 @@ class ShyamRuntime:
                 await self.provider_fabric.stop()
             except Exception as exc:
                 logger.exception(
-                    "Failed to stop provider fabric: %s", exc,
+                    "Failed to stop provider fabric: %s",
+                    exc,
                 )
 
             if self.discovery:
@@ -206,7 +226,8 @@ class ShyamRuntime:
                     await self.discovery.stop()
                 except Exception as exc:
                     logger.exception(
-                        "Failed to stop discovery: %s", exc,
+                        "Failed to stop discovery: %s",
+                        exc,
                     )
 
             if self.state.status != LifecycleState.ERROR:
@@ -219,7 +240,8 @@ class ShyamRuntime:
 
             self.state.transition_to(LifecycleState.STOPPED)
             logger.info(
-                "Shyam runtime stopped [%s]", self.state.runtime_id,
+                "Shyam runtime stopped [%s]",
+                self.state.runtime_id,
             )
             await self.events.publish(
                 RuntimeStoppedEvent(

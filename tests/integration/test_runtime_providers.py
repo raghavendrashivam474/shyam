@@ -1,4 +1,4 @@
-﻿"""Integration tests for ShyamRuntime with Provider Registry - S4."""
+"""Integration tests for ShyamRuntime with Provider Registry - S4."""
 
 import pytest
 

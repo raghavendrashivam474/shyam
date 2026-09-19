@@ -1,4 +1,4 @@
-﻿"""Unit tests for the Local Peer Discovery Service."""
+"""Unit tests for the Local Peer Discovery Service."""
 
 import asyncio
 from pathlib import Path
@@ -78,9 +78,7 @@ async def test_discovery_service_handles_peer_states(tmp_path: Path) -> None:
 
     # 1. Direct datagram processing (simulate incoming broadcast)
     peer_id = uuid4()
-    packet = (
-        f'{{"node_id": "{peer_id}", "node_name": "remote-xyz", "port": 54321}}'
-    ).encode()
+    packet = (f'{{"node_id": "{peer_id}", "node_name": "remote-xyz", "port": 54321}}').encode()
 
     # Handle incoming packet (discovered)
     service.handle_datagram(packet, "127.0.0.1")

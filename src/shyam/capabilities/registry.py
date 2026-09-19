@@ -1,4 +1,4 @@
-﻿"""In-memory Capability Registry for local node capabilities."""
+"""In-memory Capability Registry for local node capabilities."""
 
 from __future__ import annotations
 
@@ -117,9 +117,7 @@ class CapabilityRegistry:
         logger.info("Unregistered capability: %s", capability_id)
 
         if self._event_bus:
-            await self._event_bus.publish(
-                CapabilityUnregisteredEvent(capability_id=capability_id)
-            )
+            await self._event_bus.publish(CapabilityUnregisteredEvent(capability_id=capability_id))
 
         return cap
 
