@@ -190,3 +190,28 @@ def test_client_connection_error(mock_urlopen: MagicMock) -> None:
     client = ZaryaClient(token="secret-token")
     with pytest.raises(ZaryaConnectionError):
         client.get_status()
+
+
+@patch("urllib.request.urlopen")
+def test_client_server_rejects_token_401(mock_urlopen: MagicMock) -> None:
+    """Regression: server-side 401 with EIP-1 envelope raises ZaryaAuthenticationError."""
+    error_body = json.dumps({
+        "detail": {
+            "error": {
+                "code": "UNAUTHORIZED",
+                "message": "Invalid or expired ecosystem token.",
+                "detail": {},
+            }
+        }
+    }).encode("utf-8")
+    http_401 = urllib.error.HTTPError(
+        "http://127.0.0.1:8765/ecosystem/v1/identity",
+        401,
+        "Unauthorized",
+        {"Content-Type": "application/json"},
+        io.BytesIO(error_body),
+    )
+    mock_urlopen.side_effect = http_401
+    client = ZaryaClient(token="stale-token")
+    with pytest.raises(ZaryaAuthenticationError, match="Invalid or expired ecosystem token"):
+        client.get_identity()

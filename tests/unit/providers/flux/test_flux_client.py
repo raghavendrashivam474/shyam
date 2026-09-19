@@ -196,3 +196,16 @@ def test_client_structured_http_errors() -> None:
     with patch("urllib.request.urlopen", side_effect=http_500):
         with pytest.raises(FluxTransferError):
             client.initiate_transfer("p1", "/tmp/large.iso")
+
+
+def test_cancel_transfer_success() -> None:
+    """Regression: cancel_transfer must return FluxCancelResponse (S7.2 gap)."""
+    client = FluxClient()
+    payload = {
+        "transfer_id": "df825a0b-91cc-4290-b8d6-2ce40d4ed854",
+        "cancelled": True,
+    }
+    with patch("urllib.request.urlopen", return_value=_mock_http_response(200, payload)):
+        resp = client.cancel_transfer("df825a0b-91cc-4290-b8d6-2ce40d4ed854")
+        assert resp.transfer_id == "df825a0b-91cc-4290-b8d6-2ce40d4ed854"
+        assert resp.cancelled is True
