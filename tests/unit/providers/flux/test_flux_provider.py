@@ -1,4 +1,4 @@
-﻿"""Unit tests for FluxProvider."""
+﻿"""Unit tests for FluxProvider (aligned with live Gateway contract S7.1)."""
 
 from unittest.mock import MagicMock
 
@@ -71,6 +71,7 @@ def test_flux_provider_connect_success() -> None:
 
 
 def test_flux_provider_connect_failure() -> None:
+    # Provider catches FluxConnectionError internally and returns False
     client = MagicMock(spec=FluxClient)
     client.get_identity.side_effect = FluxConnectionError("Gateway down")
 
@@ -86,14 +87,13 @@ def test_flux_provider_protocol_incompatible() -> None:
     client.get_identity.return_value = FluxIdentityResponse(
         peer_id="p-1",
         version="2.3.0",
-        protocol_version="99.0",  # Incompatible major
+        protocol_version="99.0",
     )
 
     provider = FluxProvider(client=client)
     with pytest.raises(FluxProtocolError) as exc_info:
         provider.connect()
     assert "Incompatible Flux protocol" in str(exc_info.value)
-    # Provider must NOT be marked connected after protocol failure
     assert provider.is_connected is False
 
 
@@ -102,7 +102,6 @@ def test_flux_provider_refresh_status() -> None:
     provider = FluxProvider(client=client)
     provider.connect()
 
-    # Change mock status to Degraded (maps to UNAVAILABLE in Shyam)
     client.get_status.return_value = FluxStatusResponse(
         state=FluxNodeState.DEGRADED,
         peer_id="550e8400-e29b-41d4-a716-446655440000",
@@ -119,23 +118,30 @@ def test_flux_provider_delegated_operations() -> None:
     )
     client.get_peer.return_value = FluxPeerInfo(peer_id="p-remote", connectivity="reachable")
 
+    # FluxConnectResponse uses 'connected' not 'success'
     conn_val = FluxConnectResponse(peer_id="p-remote", connected=True, active_path_count=1)
     client.connect_peer.return_value = conn_val
 
+    # ANOM-002: FluxTransferResponse has no peer_id; ANOM-003: SCREAMING_SNAKE_CASE
     init_val = FluxTransferResponse(
-        transfer_id="t-1", peer_id="p-remote", status=FluxTransferStatus.QUEUED
+        transfer_id="t-1", status=FluxTransferStatus.RUNNING
     )
     client.initiate_transfer.return_value = init_val
 
+    # Matches GatewayTransferInfo
     status_val = FluxTransferStatusResponse(
         transfer_id="t-1",
         peer_id="p-remote",
         status=FluxTransferStatus.COMPLETED,
-        progress_percent=100.0,
+        bytes_transferred=1024,
+        total_bytes=1024,
+        files_transferred=1,
+        total_files=1,
     )
     client.get_transfer_status.return_value = status_val
 
-    cancel_val = FluxCancelResponse(transfer_id="t-1", status=FluxTransferStatus.CANCELLED)
+    # ANOM-004: FluxCancelResponse uses cancelled: bool
+    cancel_val = FluxCancelResponse(transfer_id="t-1", cancelled=True)
     client.cancel_transfer.return_value = cancel_val
 
     provider = FluxProvider(client=client)
@@ -158,4 +164,4 @@ def test_flux_provider_delegated_operations() -> None:
     assert status.status == FluxTransferStatus.COMPLETED
 
     cancelled = provider.cancel_transfer("t-1")
-    assert cancelled.status == FluxTransferStatus.CANCELLED
+    assert cancelled.cancelled is True

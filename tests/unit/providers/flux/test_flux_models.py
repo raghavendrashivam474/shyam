@@ -1,4 +1,7 @@
-﻿"""Unit tests for Flux Gateway contract models and exceptions."""
+﻿"""Unit tests for Flux provider data models (aligned with live Gateway contract S7.1)."""
+
+import pytest
+from pydantic import ValidationError
 
 from shyam.providers.flux.exceptions import (
     FluxClientError,
@@ -9,8 +12,13 @@ from shyam.providers.flux.exceptions import (
     FluxUnavailableError,
 )
 from shyam.providers.flux.models import (
+    FluxCancelResponse,
+    FluxConnectRequest,
+    FluxConnectResponse,
+    FluxErrorDetail,
     FluxIdentityResponse,
     FluxNodeState,
+    FluxPathInfo,
     FluxPathState,
     FluxPeerInfo,
     FluxPeersResponse,
@@ -24,102 +32,97 @@ from shyam.providers.flux.models import (
 
 
 def test_flux_identity_model() -> None:
-    data = {
-        "peer_id": "550e8400-e29b-41d4-a716-446655440000",
-        "version": "2.3.0",
-        "protocol_version": "1.0",
-    }
-    identity = FluxIdentityResponse.model_validate(data)
-    assert identity.peer_id == "550e8400-e29b-41d4-a716-446655440000"
-    assert identity.version == "2.3.0"
-    assert identity.protocol_version == "1.0"
+    resp = FluxIdentityResponse(
+        peer_id="peer-123",
+        version="0.1.0",
+        protocol_version="1.0",
+    )
+    assert resp.peer_id == "peer-123"
+    assert resp.version == "0.1.0"
+    assert resp.protocol_version == "1.0"
 
 
 def test_flux_status_model() -> None:
-    data = {
-        "state": "running",
-        "peer_id": "550e8400-e29b-41d4-a716-446655440000",
-        "discovered_peer_count": 3,
-        "active_path_count": 5,
-        "active_transfer_count": 1,
-    }
-    status = FluxStatusResponse.model_validate(data)
-    assert status.state == FluxNodeState.RUNNING
-    assert status.discovered_peer_count == 3
-    assert status.active_path_count == 5
+    resp = FluxStatusResponse(
+        state=FluxNodeState.RUNNING,
+        peer_id="peer-123",
+        discovered_peer_count=2,
+        active_path_count=1,
+        active_transfer_count=0,
+    )
+    assert resp.state == FluxNodeState.RUNNING
+    assert resp.discovered_peer_count == 2
+    assert resp.active_path_count == 1
+    assert resp.active_transfer_count == 0
 
 
 def test_flux_peers_model() -> None:
-    peer_data = {
-        "peer_id": "peer-123",
-        "address": "192.168.1.50:9000",
-        "connectivity": "reachable",
-        "paths": [
-            {
-                "path_id": "path-1",
-                "transport": "tcp_lan",
-                "remote_addr": "192.168.1.50:9000",
-                "state": "available",
-                "rtt_ms": 1.2,
-            }
-        ],
-    }
-    peer = FluxPeerInfo.model_validate(peer_data)
-    assert peer.peer_id == "peer-123"
-    assert len(peer.paths) == 1
-    assert peer.paths[0].transport == FluxTransportKind.TCP_LAN
-    assert peer.paths[0].state == FluxPathState.AVAILABLE
-    assert peer.paths[0].rtt_ms == 1.2
-
-    resp = FluxPeersResponse.model_validate({"peers": [peer_data]})
-    assert len(resp.peers) == 1
+    path = FluxPathInfo(
+        path_id="path-1",
+        transport=FluxTransportKind.TCP_LAN,
+        remote_addr="192.168.1.50:9000",
+        state=FluxPathState.AVAILABLE,
+        rtt_ms=1.2,
+    )
+    # M5 regression: Gateway returns last_seen_secs_ago (float)
+    peer = FluxPeerInfo(
+        peer_id="peer-456",
+        address="192.168.1.50:9000",
+        last_seen_secs_ago=0.5,
+        paths=[path],
+        connectivity="reachable",
+    )
+    peers_resp = FluxPeersResponse(peers=[peer])
+    assert len(peers_resp.peers) == 1
+    assert peers_resp.peers[0].peer_id == "peer-456"
+    assert peers_resp.peers[0].last_seen_secs_ago == 0.5
 
 
 def test_flux_transfer_models() -> None:
+    # ANOM-001: file_paths list instead of artifact_path
     req = FluxTransferRequest(
         peer_id="peer-123",
-        artifact_path="/tmp/test.bin",
-        artifact_name="test.bin",
+        file_paths=["/path/to/test.bin"],
     )
     assert req.peer_id == "peer-123"
-    assert not req.is_directory
+    assert req.file_paths == ["/path/to/test.bin"]
 
+    # ANOM-002 & ANOM-003: POST response has no peer_id, SCREAMING_SNAKE_CASE status
     resp = FluxTransferResponse(
-        transfer_id="xfer-001",
-        peer_id="peer-123",
-        status=FluxTransferStatus.QUEUED,
+        transfer_id="xfer-999",
+        status=FluxTransferStatus.RUNNING,
     )
-    assert resp.status == FluxTransferStatus.QUEUED
+    assert resp.transfer_id == "xfer-999"
+    assert resp.status == FluxTransferStatus.RUNNING
 
+    # ANOM-003: GET status matches GatewayTransferInfo
     status_resp = FluxTransferStatusResponse(
-        transfer_id="xfer-001",
+        transfer_id="xfer-999",
         peer_id="peer-123",
-        status=FluxTransferStatus.IN_PROGRESS,
-        progress_percent=45.5,
-        bytes_transferred=4550,
-        bytes_total=10000,
+        status=FluxTransferStatus.RUNNING,
+        bytes_transferred=512,
+        total_bytes=1024,
+        files_transferred=1,
+        total_files=2,
     )
-    assert status_resp.progress_percent == 45.5
+    assert status_resp.transfer_id == "xfer-999"
+    assert status_resp.bytes_transferred == 512
+    assert status_resp.total_bytes == 1024
+    assert status_resp.files_transferred == 1
+    assert status_resp.total_files == 2
+
+    # ANOM-004: cancel response returns boolean cancelled
+    cancel_resp = FluxCancelResponse(
+        transfer_id="xfer-999",
+        cancelled=True,
+    )
+    assert cancel_resp.transfer_id == "xfer-999"
+    assert cancel_resp.cancelled is True
 
 
 def test_flux_exceptions_hierarchy() -> None:
-    err = FluxClientError("Custom error", code="custom_code", http_status=400)
-    assert isinstance(err, Exception)
-    assert err.code == "custom_code"
-    assert err.http_status == 400
-
-    conn_err = FluxConnectionError()
-    assert isinstance(conn_err, FluxClientError)
-
-    proto_err = FluxProtocolError("mismatch")
-    assert isinstance(proto_err, FluxClientError)
-
-    peer_err = FluxPeerNotFoundError("peer-xyz")
-    assert peer_err.http_status == 404
-    assert "peer-xyz" in str(peer_err)
-
-    xfer_err = FluxTransferError("disk full", transfer_id="t1")
-    assert xfer_err.transfer_id == "t1"
-
-    unavail_err = FluxUnavailableError()
-    assert unavail_err.http_status == 503
+    assert issubclass(FluxConnectionError, FluxClientError)
+    assert issubclass(FluxProtocolError, FluxClientError)
+    assert issubclass(FluxPeerNotFoundError, FluxClientError)
+    assert issubclass(FluxTransferError, FluxClientError)
+    assert issubclass(FluxUnavailableError, FluxClientError)

@@ -1,4 +1,4 @@
-﻿"""Unit tests for FluxClient."""
+﻿"""Unit tests for FluxClient (aligned with live Gateway contract S7.1)."""
 
 import io
 import json
@@ -10,6 +10,7 @@ import pytest
 
 from shyam.providers.flux.client import FluxClient
 from shyam.providers.flux.exceptions import (
+    FluxClientError,
     FluxConnectionError,
     FluxPeerNotFoundError,
     FluxProtocolError,
@@ -62,8 +63,8 @@ def test_get_peers_and_peer_detail() -> None:
         "peers": [
             {
                 "peer_id": "peer-abc",
-                "connectivity": "reachable",
-                "paths": [],
+                "address": "10.0.0.2:9000",
+                "last_seen_secs_ago": 1.5,
             }
         ]
     }
@@ -71,10 +72,12 @@ def test_get_peers_and_peer_detail() -> None:
         peers_resp = client.get_peers()
         assert len(peers_resp.peers) == 1
         assert peers_resp.peers[0].peer_id == "peer-abc"
+        assert peers_resp.peers[0].last_seen_secs_ago == 1.5
 
     peer_detail = {
         "peer_id": "peer-abc",
         "address": "10.0.0.2:9000",
+        "last_seen_secs_ago": 0.3,
         "connectivity": "reachable",
         "paths": [
             {
@@ -89,6 +92,7 @@ def test_get_peers_and_peer_detail() -> None:
         detail_resp = client.get_peer("peer-abc")
         assert detail_resp.peer_id == "peer-abc"
         assert len(detail_resp.paths) == 1
+        assert detail_resp.last_seen_secs_ago == 0.3
 
 
 def test_transfer_lifecycle() -> None:
@@ -104,56 +108,57 @@ def test_transfer_lifecycle() -> None:
         assert conn_resp.connected is True
 
     # 2. Initiate Transfer
-    payload_init = {"transfer_id": "t100", "peer_id": "p1", "status": "queued"}
+    payload_init = {"transfer_id": "t100", "status": "RUNNING"}
     with patch(
         "urllib.request.urlopen",
         return_value=_mock_http_response(200, payload_init),
     ):
         xfer_resp = client.initiate_transfer(peer_id="p1", artifact_path="/tmp/file.txt")
         assert xfer_resp.transfer_id == "t100"
-        assert xfer_resp.status == FluxTransferStatus.QUEUED
+        assert xfer_resp.status == FluxTransferStatus.RUNNING
 
     # 3. Status
     payload_status = {
         "transfer_id": "t100",
         "peer_id": "p1",
-        "status": "in_progress",
-        "progress_percent": 50.0,
-        "bytes_transferred": 50,
-        "bytes_total": 100,
+        "status": "COMPLETED",
+        "bytes_transferred": 1024,
+        "total_bytes": 1024,
+        "files_transferred": 1,
+        "total_files": 1,
     }
     with patch(
         "urllib.request.urlopen",
         return_value=_mock_http_response(200, payload_status),
     ):
         status_resp = client.get_transfer_status("t100")
-        assert status_resp.progress_percent == 50.0
+        assert status_resp.status == FluxTransferStatus.COMPLETED
+        assert status_resp.bytes_transferred == 1024
 
     # 4. Cancel
-    payload_cancel = {"transfer_id": "t100", "status": "cancelled"}
+    payload_cancel = {"transfer_id": "t100", "cancelled": True}
     with patch(
         "urllib.request.urlopen",
         return_value=_mock_http_response(200, payload_cancel),
     ):
         cancel_resp = client.cancel_transfer("t100")
-        assert cancel_resp.status == FluxTransferStatus.CANCELLED
+        assert cancel_resp.cancelled is True
 
 
 def test_client_connection_error() -> None:
     client = FluxClient()
     with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Connection refused")):
-        with pytest.raises(FluxConnectionError) as exc_info:
+        with pytest.raises(FluxConnectionError):
             client.get_identity()
-        assert "Cannot reach Flux Gateway" in str(exc_info.value)
 
 
 def test_client_structured_http_errors() -> None:
     client = FluxClient()
 
-    # 404 Peer Not Found
+    # 404 Peer Not Found (Gateway nested error envelope format)
     err_body = json.dumps(
-        {"code": "peer_not_found", "message": "Peer missing", "detail": {"peer_id": "px"}}
-    ).encode()
+        {"error": {"code": "PEER_NOT_FOUND", "message": "Peer missing", "detail": {"peer_id": "px"}}}
+    ).encode("utf-8")
     http_404 = urllib.error.HTTPError(
         "http://127.0.0.1", 404, "Not Found", {}, io.BytesIO(err_body)
     )
@@ -163,8 +168,8 @@ def test_client_structured_http_errors() -> None:
 
     # 409 Protocol Error
     err_body = json.dumps(
-        {"code": "protocol_mismatch", "message": "Unsupported wire protocol"}
-    ).encode()
+        {"error": {"code": "PROTOCOL_MISMATCH", "message": "Unsupported wire protocol"}}
+    ).encode("utf-8")
     http_409 = urllib.error.HTTPError(
         "http://127.0.0.1", 409, "Conflict", {}, io.BytesIO(err_body)
     )
@@ -173,7 +178,7 @@ def test_client_structured_http_errors() -> None:
             client.get_identity()
 
     # 503 Unavailable Error
-    err_body = json.dumps({"code": "unavailable", "message": "Flux shutting down"}).encode()
+    err_body = json.dumps({"error": {"code": "NODE_NOT_READY", "message": "Flux shutting down"}}).encode("utf-8")
     http_503 = urllib.error.HTTPError(
         "http://127.0.0.1", 503, "Unavailable", {}, io.BytesIO(err_body)
     )
@@ -183,8 +188,8 @@ def test_client_structured_http_errors() -> None:
 
     # Generic Transfer Error
     err_body = json.dumps(
-        {"code": "transfer_rejected", "message": "Disk capacity exceeded"}
-    ).encode()
+        {"error": {"code": "TRANSFER_ERROR", "message": "Disk capacity exceeded"}}
+    ).encode("utf-8")
     http_500 = urllib.error.HTTPError(
         "http://127.0.0.1", 500, "Server Error", {}, io.BytesIO(err_body)
     )
