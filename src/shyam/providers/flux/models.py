@@ -48,15 +48,16 @@ class FluxTransportKind(StrEnum):
 
 
 class FluxTransferStatus(StrEnum):
-    """Transfer lifecycle states."""
+    """Transfer lifecycle states matching Gateway TransferStatus.
 
-    QUEUED = "queued"
-    CONNECTING = "connecting"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    PAUSED = "paused"
+    Gateway uses #[serde(rename_all = "SCREAMING_SNAKE_CASE")]:
+    CREATED, RUNNING, COMPLETED, FAILED, CANCELLED
+    """
+    CREATED = "CREATED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
 # ── Identity ─────────────────────────────────────────────────────
@@ -98,11 +99,12 @@ class FluxPathInfo(BaseModel):
 
 
 class FluxPeerInfo(BaseModel):
-    """GET /flux/v1/peers/{peer_id}"""
+    """GET /flux/v1/peers/{peer_id} — matches Gateway PeerSummary."""
 
     peer_id: str
     address: str | None = None
     last_seen: str | None = None
+    last_seen_secs_ago: float | None = None
     paths: list[FluxPathInfo] = Field(default_factory=list)
     connectivity: str = Field(
         default="unknown",
@@ -126,50 +128,55 @@ class FluxConnectRequest(BaseModel):
 
 
 class FluxConnectResponse(BaseModel):
-    """POST /flux/v1/connect response"""
+    """POST /flux/v1/connect response — matches Gateway ConnectResponse."""
 
     peer_id: str
-    connected: bool
+    success: bool = True
+    connected_address: str | None = None
+    message: str | None = None
+    connected: bool | None = None
     active_path_count: int = Field(default=0)
+
+    @property
+    def is_connected(self) -> bool:
+        return self.connected if self.connected is not None else self.success
 
 
 # ── Transfer ─────────────────────────────────────────────────────
 
 
 class FluxTransferRequest(BaseModel):
-    """POST /flux/v1/transfer"""
-
+    """POST /flux/v1/transfer — matches Gateway StartTransferRequest."""
     peer_id: str
-    artifact_path: str = Field(..., description="Local path to artifact")
-    artifact_name: str | None = None
-    is_directory: bool = False
+    file_paths: list[str] = Field(..., description="List of local file paths to transfer")
 
 
 class FluxTransferResponse(BaseModel):
-    """POST /flux/v1/transfer response"""
+    """POST /flux/v1/transfer response — matches Gateway StartTransferResponse.
 
+    Note: The POST response does NOT include peer_id.
+    Use GET /transfer/{id} (FluxTransferStatusResponse) for peer_id.
+    """
     transfer_id: str
-    peer_id: str
     status: FluxTransferStatus
 
 
 class FluxTransferStatusResponse(BaseModel):
-    """GET /flux/v1/transfer/{transfer_id}"""
-
+    """GET /flux/v1/transfer/{transfer_id} — matches Gateway GatewayTransferInfo."""
     transfer_id: str
     peer_id: str
     status: FluxTransferStatus
-    progress_percent: float = Field(default=0.0, ge=0.0, le=100.0)
     bytes_transferred: int = Field(default=0)
-    bytes_total: int = Field(default=0)
+    total_bytes: int = Field(default=0)
+    files_transferred: int = Field(default=0)
+    total_files: int = Field(default=0)
     error_message: str | None = None
 
 
 class FluxCancelResponse(BaseModel):
-    """POST /flux/v1/transfer/{transfer_id}/cancel"""
-
+    """POST /flux/v1/transfer/{transfer_id}/cancel — matches Gateway CancelTransferResponse."""
     transfer_id: str
-    status: FluxTransferStatus
+    cancelled: bool
 
 
 # ── Error ────────────────────────────────────────────────────────
