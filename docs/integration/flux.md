@@ -54,3 +54,33 @@ Shyam expresses high-level data movement and synchronization intent. Flux is sol
    not ephemeral IP addresses or port numbers.
 3. **Sovereign Path Selection**: Shyam cannot force a specific low-level network path over Flux's internal routing metrics.
 4. **Adapter Decoupling**: Integration with Flux occurs through dedicated provider adapter contracts (to be implemented in S6).
+
+
+## 5. S7 Flux Gateway API v1 Contract (ADR-007)
+
+To preserve architectural decoupling and solve the lack of a built-in HTTP server in `flux-node` v2.3.0, S7 establishes a contract-first **Flux Gateway HTTP API** running locally at `http://127.0.0.1:9100/flux/v1`.
+
+### Authoritative Endpoints
+
+| Method | Path | Request Body | Response Shape |
+|---|---|---|---|
+| `GET` | `/identity` | None | `FluxIdentityResponse` |
+| `GET` | `/status` | None | `FluxStatusResponse` |
+| `GET` | `/peers` | None | `FluxPeersResponse` |
+| `GET` | `/peers/{peer_id}` | None | `FluxPeerInfo` |
+| `POST` | `/connect` | `{"peer_id": "..."}` | `FluxConnectResponse` |
+| `POST` | `/transfer` | `{"peer_id": "...", "artifact_path": "..."}` | `FluxTransferResponse` |
+| `GET` | `/transfer/{transfer_id}` | None | `FluxTransferStatusResponse` |
+| `POST` | `/transfer/{transfer_id}/cancel` | None | `FluxCancelResponse` |
+
+### Error Payload Specification
+Errors returning from the gateway utilize a standard structured format matched by `FluxClientError`:
+```json
+{
+  "code": "peer_not_found",
+  "message": "Requested peer is not known to Flux",
+  "detail": {
+    "peer_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
