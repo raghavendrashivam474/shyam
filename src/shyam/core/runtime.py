@@ -1,4 +1,4 @@
-"""Shyam Core Runtime orchestrator."""
+﻿"""Shyam Core Runtime orchestrator."""
 
 import asyncio
 import logging
@@ -11,7 +11,15 @@ from shyam.core.config import ShyamSettings
 from shyam.core.lifecycle import InvalidStateTransitionError, LifecycleState
 from shyam.core.logging import setup_logging
 from shyam.core.state import RuntimeState
-from shyam.discovery.model import NodeIdentityReadyEvent
+from shyam.discovery.ecosystem_models import EcosystemSnapshot
+from shyam.discovery.ecosystem_registry import EcosystemRegistry
+from shyam.discovery.ecosystem_service import EcosystemDiscoveryService
+from shyam.discovery.model import (
+    NodeIdentityReadyEvent,
+    PeerDiscoveredEvent,
+    PeerLostEvent,
+    PeerUpdatedEvent,
+)
 from shyam.discovery.service import DiscoveryService
 from shyam.events.bus import (
     EventBus,
@@ -39,6 +47,9 @@ class ShyamRuntime:
         self.capabilities = CapabilityRegistry(event_bus=self.events)
         self.providers = ProviderRegistry(event_bus=self.events)
 
+        # In-memory Ecosystem Discovery Registry (S8)
+        self.ecosystem_registry = EcosystemRegistry(event_bus=self.events)
+
         # Instantiate the Local Provider Fabric (S5)
         self.provider_fabric = LocalProviderFabric(
             capability_registry=self.capabilities,
@@ -62,6 +73,7 @@ class ShyamRuntime:
         # Components initialized on start()
         self.identity_manager: IdentityManager | None = None
         self.discovery: DiscoveryService | None = None
+        self.ecosystem: EcosystemDiscoveryService | None = None
 
     @property
     def status(self) -> LifecycleState:
@@ -72,6 +84,12 @@ class ShyamRuntime:
     def is_running(self) -> bool:
         """True if the runtime is actively running."""
         return self.state.status == LifecycleState.RUNNING
+
+    async def get_ecosystem_snapshot(self) -> EcosystemSnapshot:
+        """Return the current normalized view of the ecosystem (S8)."""
+        if self.ecosystem:
+            return await self.ecosystem.discover()
+        return self.ecosystem_registry.create_snapshot()
 
     async def start(self) -> None:
         """Initialize and start the Shyam runtime."""
@@ -162,6 +180,37 @@ class ShyamRuntime:
                             self.settings.flux_url,
                         )
 
+                # Instantiate and initialize Ecosystem Discovery Service (S8)
+                self.ecosystem = EcosystemDiscoveryService(
+                    local_identity=identity,
+                    provider_registry=self.providers,
+                    capability_registry=self.capabilities,
+                    ecosystem_registry=self.ecosystem_registry,
+                    zarya_provider=self.zarya_provider,
+                    flux_provider=self.flux_provider,
+                    event_bus=self.events,
+                    stale_threshold_secs=self.settings.discovery_expiry,
+                )
+                await self.ecosystem.discover_local_node()
+
+                # Wire UDP peer events to Ecosystem Discovery
+                async def _on_udp_peer_discovered(event: PeerDiscoveredEvent) -> None:
+                    if self.ecosystem:
+                        await self.ecosystem.ingest_udp_peer(event.peer)
+
+                async def _on_udp_peer_updated(event: PeerUpdatedEvent) -> None:
+                    if self.ecosystem:
+                        await self.ecosystem.ingest_udp_peer(event.peer)
+
+                async def _on_udp_peer_lost(event: PeerLostEvent) -> None:
+                    if self.ecosystem:
+                        await self.ecosystem.handle_udp_peer_lost(event.node_id)
+
+                await self.events.subscribe(PeerDiscoveredEvent, _on_udp_peer_discovered)
+                await self.events.subscribe(PeerUpdatedEvent, _on_udp_peer_updated)
+                await self.events.subscribe(PeerLostEvent, _on_udp_peer_lost)
+
+                # Start UDP Discovery Service if enabled
                 if self.settings.discovery_enabled:
                     self.discovery = DiscoveryService(
                         identity_manager=self.identity_manager,
