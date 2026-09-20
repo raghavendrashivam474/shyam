@@ -7,7 +7,7 @@ from shyam.events.bus import Event, EventBus
 from shyam.providers.model import Provider
 from shyam.providers.registry import ProviderRegistry
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 __all__ = [
     "Event",
