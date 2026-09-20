@@ -1,4 +1,4 @@
-﻿"""Shyam Core Runtime orchestrator with S9 Hybrid Navigator."""
+﻿"""Shyam Core Runtime orchestrator with S9 Hybrid Navigator and S10 Workflow Engine."""
 
 import asyncio
 import logging
@@ -36,6 +36,14 @@ from shyam.providers.flux.provider import FluxProvider
 from shyam.providers.registry import ProviderRegistry
 from shyam.providers.zarya.provider import ZaryaProvider
 
+# S10 Workflow subsystem imports
+from shyam.workflow.engine import WorkflowCancellationToken, WorkflowEngine
+from shyam.workflow.executor import ExecutorRegistry
+from shyam.workflow.executors.flux import FluxExecutor
+from shyam.workflow.executors.local_fs import LocalFilesystemExecutor
+from shyam.workflow.executors.zarya import ZaryaExecutor
+from shyam.workflow.models import Workflow, WorkflowResult
+
 logger = logging.getLogger("shyam.runtime")
 
 
@@ -72,6 +80,18 @@ class ShyamRuntime:
             base_url=self.settings.flux_url,
         )
 
+        # S10: Setup Capability Execution Boundary and Workflow Engine
+        self.executor_registry = ExecutorRegistry()
+        self.executor_registry.register("local.filesystem", LocalFilesystemExecutor())
+        self.executor_registry.register("zarya.sovereign", ZaryaExecutor(self.zarya_provider))
+        self.executor_registry.register("flux.connectivity", FluxExecutor(self.flux_provider))
+
+        self.workflow_engine = WorkflowEngine(
+            navigator_fn=self.navigate,
+            executor_registry=self.executor_registry,
+            event_bus=self.events,
+        )
+
         self._lock = asyncio.Lock()
         setup_logging(self.settings)
 
@@ -100,6 +120,20 @@ class ShyamRuntime:
         """Resolve a capability requirement against the current ecosystem snapshot (S9)."""
         snapshot = await self.get_ecosystem_snapshot()
         return self.navigator.navigate(request, snapshot)
+
+    async def run_workflow(
+        self,
+        workflow: Workflow,
+        cancellation_token: WorkflowCancellationToken | None = None,
+    ) -> WorkflowResult:
+        """Execute a multi-step Workflow sequentially using S9 Navigator and S10 Executors.
+
+        Args:
+            workflow: Immutable Workflow definition.
+            cancellation_token: Optional cancellation controller.
+        """
+        logger.info("Executing workflow '%s' [%s] via runtime engine...", workflow.name, workflow.workflow_id)
+        return await self.workflow_engine.run(workflow, cancellation_token)
 
     async def start(self) -> None:
         """Initialize and start the Shyam runtime."""
