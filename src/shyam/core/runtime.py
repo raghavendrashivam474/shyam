@@ -1,4 +1,4 @@
-﻿"""Shyam Core Runtime orchestrator."""
+﻿"""Shyam Core Runtime orchestrator with S9 Hybrid Navigator."""
 
 import asyncio
 import logging
@@ -29,6 +29,8 @@ from shyam.events.bus import (
     RuntimeStoppingEvent,
 )
 from shyam.identity.manager import IdentityManager
+from shyam.navigation.models import NavigationRequest, NavigationResult
+from shyam.navigation.navigator import HybridNavigator
 from shyam.providers.fabric import LocalProviderFabric
 from shyam.providers.flux.provider import FluxProvider
 from shyam.providers.registry import ProviderRegistry
@@ -49,6 +51,9 @@ class ShyamRuntime:
 
         # In-memory Ecosystem Discovery Registry (S8)
         self.ecosystem_registry = EcosystemRegistry(event_bus=self.events)
+
+        # Instantiate the S9 Hybrid Navigator
+        self.navigator = HybridNavigator()
 
         # Instantiate the Local Provider Fabric (S5)
         self.provider_fabric = LocalProviderFabric(
@@ -90,6 +95,11 @@ class ShyamRuntime:
         if self.ecosystem:
             return await self.ecosystem.discover()
         return self.ecosystem_registry.create_snapshot()
+
+    async def navigate(self, request: NavigationRequest) -> NavigationResult:
+        """Resolve a capability requirement against the current ecosystem snapshot (S9)."""
+        snapshot = await self.get_ecosystem_snapshot()
+        return self.navigator.navigate(request, snapshot)
 
     async def start(self) -> None:
         """Initialize and start the Shyam runtime."""
