@@ -12,12 +12,14 @@ from shyam.context.models import (
     RecentActivityEntry,
     WorkStatus,
 )
+from shyam.context.service import EcosystemContextService
 from shyam.context.store import EcosystemStateStore
 
 __all__ = [
     "ActiveWorkItem",
     "ActivityKind",
     "EcosystemContext",
+    "EcosystemContextService",
     "EcosystemState",
     "EcosystemStateStore",
     "RecentActivityEntry",

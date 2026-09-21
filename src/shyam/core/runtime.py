@@ -1,4 +1,4 @@
-﻿"""Shyam Core Runtime orchestrator with S9 Hybrid Navigator, S10 Workflow Engine, and S11 Composite Capabilities."""
+﻿"""Shyam Core Runtime orchestrator with S12 Ecosystem State & Context awareness."""
 
 import asyncio
 import logging
@@ -11,6 +11,12 @@ from shyam.composite import (
     CompositeCapabilityRegistry,
     CompositeEngine,
     CompositeResult,
+)
+from shyam.context import (
+    EcosystemContext,
+    EcosystemContextService,
+    EcosystemState,
+    EcosystemStateStore,
 )
 from shyam.core.config import ShyamSettings
 from shyam.core.lifecycle import InvalidStateTransitionError, LifecycleState
@@ -53,7 +59,7 @@ logger = logging.getLogger("shyam.runtime")
 
 
 class ShyamRuntime:
-    """Standalone, local-first runtime core for Shyam."""
+    """Standalone, local-first runtime core for Shyam with S12 State & Context integrations."""
 
     def __init__(self, settings: ShyamSettings | None = None) -> None:
         self.settings = settings or ShyamSettings()
@@ -64,6 +70,14 @@ class ShyamRuntime:
 
         # In-memory Ecosystem Discovery Registry (S8)
         self.ecosystem_registry = EcosystemRegistry(event_bus=self.events)
+
+        # Instantiate S12 state store and coordinator service
+        self.state_store = EcosystemStateStore()
+        self.context_service = EcosystemContextService(
+            registry=self.ecosystem_registry,
+            event_bus=self.events,
+            store=self.state_store,
+        )
 
         # Instantiate the S9 Hybrid Navigator
         self.navigator = HybridNavigator()
@@ -127,6 +141,20 @@ class ShyamRuntime:
         if self.ecosystem:
             return await self.ecosystem.discover()
         return self.ecosystem_registry.create_snapshot()
+
+    async def get_ecosystem_state(self) -> EcosystemState:
+        """Return a frozen snapshot of current state and active workflows (S12)."""
+        # Ensure discovery snapshot in state store is up to date before returning
+        snapshot = await self.get_ecosystem_snapshot()
+        await self.state_store.update_discovery(snapshot)
+        return await self.state_store.get_state()
+
+    async def get_ecosystem_context(self) -> EcosystemContext:
+        """Return a frozen context view detailing situational awareness (S12)."""
+        # Ensure discovery snapshot in state store is up to date before returning
+        snapshot = await self.get_ecosystem_snapshot()
+        await self.state_store.update_discovery(snapshot)
+        return await self.state_store.get_context()
 
     async def navigate(self, request: NavigationRequest) -> NavigationResult:
         """Resolve a capability requirement against the current ecosystem snapshot (S9)."""
@@ -282,6 +310,9 @@ class ShyamRuntime:
                 await self.events.subscribe(PeerUpdatedEvent, _on_udp_peer_updated)
                 await self.events.subscribe(PeerLostEvent, _on_udp_peer_lost)
 
+                # Start the S12 Context Service to monitor the ecosystem
+                await self.context_service.start()
+
                 # Start UDP Discovery Service if enabled
                 if self.settings.discovery_enabled:
                     self.discovery = DiscoveryService(
@@ -334,6 +365,15 @@ class ShyamRuntime:
                 self.state.runtime_id,
             )
 
+            # Stop the S12 Context Service first to clean up listeners
+            try:
+                await self.context_service.stop()
+            except Exception as exc:
+                logger.exception(
+                    "Failed to stop context service: %s",
+                    exc,
+                )
+
             try:
                 await self.provider_fabric.stop()
             except Exception as exc:
@@ -363,6 +403,7 @@ class ShyamRuntime:
             logger.info(
                 "Shyam runtime stopped [%s]",
                 self.state.runtime_id,
+                self.settings.environment if hasattr(self, 'settings') else 'unknown'
             )
             await self.events.publish(
                 RuntimeStoppedEvent(
