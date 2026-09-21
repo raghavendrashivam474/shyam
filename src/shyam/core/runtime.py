@@ -1,4 +1,4 @@
-﻿"""Shyam Core Runtime orchestrator with S12 Ecosystem Context & S13 Identity/Trust."""
+﻿"""Shyam Core Runtime orchestrator with S12 Ecosystem Context, S13 Identity/Trust & S14 Peer Sync."""
 
 import asyncio
 import logging
@@ -51,6 +51,7 @@ from shyam.providers.fabric import LocalProviderFabric
 from shyam.providers.flux.provider import FluxProvider
 from shyam.providers.registry import ProviderRegistry
 from shyam.providers.zarya.provider import ZaryaProvider
+from shyam.sync import SyncService
 from shyam.trust import RelationshipType, TrustRecord, TrustService, TrustStatus
 
 # S10 Workflow subsystem imports
@@ -65,7 +66,7 @@ logger = logging.getLogger("shyam.runtime")
 
 
 class ShyamRuntime:
-    """Standalone, local-first runtime core for Shyam with S13 Identity & Trust integrations."""
+    """Standalone, local-first runtime core for Shyam with S13 Trust and S14 Peer Synchronization."""
 
     def __init__(self, settings: ShyamSettings | None = None) -> None:
         self.settings = settings or ShyamSettings()
@@ -90,6 +91,9 @@ class ShyamRuntime:
             data_dir=self.settings.data_directory,
             event_bus=self.events,
         )
+
+        # S14 Sync Service (initialized in start() when identity/keypair are loaded)
+        self.sync_service: SyncService | None = None
 
         # Instantiate the S9 Hybrid Navigator
         self.navigator = HybridNavigator()
@@ -157,6 +161,13 @@ class ShyamRuntime:
         """Access the S13 Trust Service."""
         return self.trust_service
 
+    @property
+    def sync(self) -> SyncService:
+        """Access the S14 Peer Synchronization Service."""
+        if self.sync_service is None:
+            raise RuntimeError("SyncService is not initialized. Runtime must be started first.")
+        return self.sync_service
+
     async def get_ecosystem_snapshot(self) -> EcosystemSnapshot:
         """Return the current normalized view of the ecosystem (S8)."""
         if self.ecosystem:
@@ -200,7 +211,7 @@ class ShyamRuntime:
         return await self.workflow_engine.run(workflow, cancellation_token)
 
     async def start(self) -> None:
-        """Initialize and start the Shyam runtime with S13 identity & trust setup."""
+        """Initialize and start the Shyam runtime with S13 identity & S14 sync setup."""
         async with self._lock:
             if self.state.status != LifecycleState.CREATED:
                 raise InvalidStateTransitionError(
@@ -241,6 +252,14 @@ class ShyamRuntime:
                     relationship=RelationshipType.PERSONAL,
                     alias=identity.node_name,
                     metadata={"is_local": True},
+                )
+
+                # S14: Peer Synchronization Service initialization
+                self.sync_service = SyncService(
+                    local_node_id=identity.node_id,
+                    keypair=self.keypair,
+                    trust_service=self.trust_service,
+                    event_bus=self.events,
                 )
 
                 await self.events.publish(
