@@ -1,12 +1,17 @@
-﻿"""Shyam Core Runtime orchestrator with S9 Hybrid Navigator and S10 Workflow Engine."""
+﻿"""Shyam Core Runtime orchestrator with S9 Hybrid Navigator, S10 Workflow Engine, and S11 Composite Capabilities."""
 
 import asyncio
 import logging
 from types import TracebackType
-from typing import Self
+from typing import Any, Self
 
 from shyam.capabilities.model import AvailabilityStatus, Capability
 from shyam.capabilities.registry import CapabilityRegistry
+from shyam.composite import (
+    CompositeCapabilityRegistry,
+    CompositeEngine,
+    CompositeResult,
+)
 from shyam.core.config import ShyamSettings
 from shyam.core.lifecycle import InvalidStateTransitionError, LifecycleState
 from shyam.core.logging import setup_logging
@@ -92,6 +97,13 @@ class ShyamRuntime:
             event_bus=self.events,
         )
 
+        # S11: Setup Composite Capability Subsystem
+        self.composites = CompositeCapabilityRegistry()
+        self.composite_engine = CompositeEngine(
+            workflow_engine=self.workflow_engine,
+            registry=self.composites,
+        )
+
         self._lock = asyncio.Lock()
         setup_logging(self.settings)
 
@@ -120,6 +132,22 @@ class ShyamRuntime:
         """Resolve a capability requirement against the current ecosystem snapshot (S9)."""
         snapshot = await self.get_ecosystem_snapshot()
         return self.navigator.navigate(request, snapshot)
+
+    async def invoke_composite(
+        self,
+        capability_id: str,
+        inputs: dict[str, Any],
+        cancellation_token: WorkflowCancellationToken | None = None,
+    ) -> CompositeResult:
+        """Invoke a composite capability by resolving bindings and running steps through S10.
+
+        Args:
+            capability_id: Namespaced identifier of the composite.
+            inputs: Inputs mapping to the composite's input contract.
+            cancellation_token: Optional cooperative cancellation token.
+        """
+        logger.info("Executing composite capability '%s' via runtime engine...", capability_id)
+        return await self.composite_engine.invoke(capability_id, inputs, cancellation_token)
 
     async def run_workflow(
         self,
