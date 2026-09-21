@@ -144,14 +144,12 @@ class ShyamRuntime:
 
     async def get_ecosystem_state(self) -> EcosystemState:
         """Return a frozen snapshot of current state and active workflows (S12)."""
-        # Ensure discovery snapshot in state store is up to date before returning
         snapshot = await self.get_ecosystem_snapshot()
         await self.state_store.update_discovery(snapshot)
         return await self.state_store.get_state()
 
     async def get_ecosystem_context(self) -> EcosystemContext:
         """Return a frozen context view detailing situational awareness (S12)."""
-        # Ensure discovery snapshot in state store is up to date before returning
         snapshot = await self.get_ecosystem_snapshot()
         await self.state_store.update_discovery(snapshot)
         return await self.state_store.get_context()
@@ -403,7 +401,6 @@ class ShyamRuntime:
             logger.info(
                 "Shyam runtime stopped [%s]",
                 self.state.runtime_id,
-                self.settings.environment if hasattr(self, 'settings') else 'unknown'
             )
             await self.events.publish(
                 RuntimeStoppedEvent(
