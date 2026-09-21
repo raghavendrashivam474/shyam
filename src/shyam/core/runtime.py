@@ -1,4 +1,4 @@
-﻿"""Shyam Core Runtime orchestrator with S12 Ecosystem State & Context awareness."""
+﻿"""Shyam Core Runtime orchestrator with S12 Ecosystem Context & S13 Identity/Trust."""
 
 import asyncio
 import logging
@@ -39,13 +39,19 @@ from shyam.events.bus import (
     RuntimeStoppedEvent,
     RuntimeStoppingEvent,
 )
-from shyam.identity.manager import IdentityManager
+from shyam.identity import (
+    CryptoIdentity,
+    IdentityManager,
+    KeyPair,
+    load_or_create_keypair,
+)
 from shyam.navigation.models import NavigationRequest, NavigationResult
 from shyam.navigation.navigator import HybridNavigator
 from shyam.providers.fabric import LocalProviderFabric
 from shyam.providers.flux.provider import FluxProvider
 from shyam.providers.registry import ProviderRegistry
 from shyam.providers.zarya.provider import ZaryaProvider
+from shyam.trust import RelationshipType, TrustRecord, TrustService, TrustStatus
 
 # S10 Workflow subsystem imports
 from shyam.workflow.engine import WorkflowCancellationToken, WorkflowEngine
@@ -59,7 +65,7 @@ logger = logging.getLogger("shyam.runtime")
 
 
 class ShyamRuntime:
-    """Standalone, local-first runtime core for Shyam with S12 State & Context integrations."""
+    """Standalone, local-first runtime core for Shyam with S13 Identity & Trust integrations."""
 
     def __init__(self, settings: ShyamSettings | None = None) -> None:
         self.settings = settings or ShyamSettings()
@@ -77,6 +83,12 @@ class ShyamRuntime:
             registry=self.ecosystem_registry,
             event_bus=self.events,
             store=self.state_store,
+        )
+
+        # Instantiate S13 Trust Service
+        self.trust_service = TrustService(
+            data_dir=self.settings.data_directory,
+            event_bus=self.events,
         )
 
         # Instantiate the S9 Hybrid Navigator
@@ -121,8 +133,12 @@ class ShyamRuntime:
         self._lock = asyncio.Lock()
         setup_logging(self.settings)
 
-        # Components initialized on start()
+        # S13 Components initialized on start()
         self.identity_manager: IdentityManager | None = None
+        self.crypto_identity: CryptoIdentity | None = None
+        self.keypair: KeyPair | None = None
+
+        # S8 / Network components initialized on start()
         self.discovery: DiscoveryService | None = None
         self.ecosystem: EcosystemDiscoveryService | None = None
 
@@ -135,6 +151,11 @@ class ShyamRuntime:
     def is_running(self) -> bool:
         """True if the runtime is actively running."""
         return self.state.status == LifecycleState.RUNNING
+
+    @property
+    def trust(self) -> TrustService:
+        """Access the S13 Trust Service."""
+        return self.trust_service
 
     async def get_ecosystem_snapshot(self) -> EcosystemSnapshot:
         """Return the current normalized view of the ecosystem (S8)."""
@@ -165,13 +186,7 @@ class ShyamRuntime:
         inputs: dict[str, Any],
         cancellation_token: WorkflowCancellationToken | None = None,
     ) -> CompositeResult:
-        """Invoke a composite capability by resolving bindings and running steps through S10.
-
-        Args:
-            capability_id: Namespaced identifier of the composite.
-            inputs: Inputs mapping to the composite's input contract.
-            cancellation_token: Optional cooperative cancellation token.
-        """
+        """Invoke a composite capability by resolving bindings and running steps through S10."""
         logger.info("Executing composite capability '%s' via runtime engine...", capability_id)
         return await self.composite_engine.invoke(capability_id, inputs, cancellation_token)
 
@@ -180,17 +195,12 @@ class ShyamRuntime:
         workflow: Workflow,
         cancellation_token: WorkflowCancellationToken | None = None,
     ) -> WorkflowResult:
-        """Execute a multi-step Workflow sequentially using S9 Navigator and S10 Executors.
-
-        Args:
-            workflow: Immutable Workflow definition.
-            cancellation_token: Optional cancellation controller.
-        """
+        """Execute a multi-step Workflow sequentially using S9 Navigator and S10 Executors."""
         logger.info("Executing workflow '%s' [%s] via runtime engine...", workflow.name, workflow.workflow_id)
         return await self.workflow_engine.run(workflow, cancellation_token)
 
     async def start(self) -> None:
-        """Initialize and start the Shyam runtime."""
+        """Initialize and start the Shyam runtime with S13 identity & trust setup."""
         async with self._lock:
             if self.state.status != LifecycleState.CREATED:
                 raise InvalidStateTransitionError(
@@ -210,11 +220,28 @@ class ShyamRuntime:
                     exist_ok=True,
                 )
 
+                # S13.1: Logical Identity initialization
                 self.identity_manager = IdentityManager(
                     data_dir=self.settings.data_directory,
                     custom_node_name=self.settings.runtime_name,
                 )
                 identity = self.identity_manager.get_or_create_identity()
+
+                # S13.2: Cryptographic Identity & KeyPair initialization
+                self.keypair, self.crypto_identity = load_or_create_keypair(
+                    data_dir=self.settings.data_directory,
+                    node_id=identity.node_id,
+                )
+
+                # S13.3: Trust Service initialization & self-trust registration
+                await self.trust_service.initialize()
+                await self.trust_service.grant_trust(
+                    node_id=str(identity.node_id),
+                    public_key=self.crypto_identity.public_key,
+                    relationship=RelationshipType.PERSONAL,
+                    alias=identity.node_name,
+                    metadata={"is_local": True},
+                )
 
                 await self.events.publish(
                     NodeIdentityReadyEvent(
