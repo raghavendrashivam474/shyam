@@ -4,7 +4,6 @@ import shyam
 
 
 def test_package_version():
-    """Verify that package version is defined and adheres to S1 milestone target."""
+    """Verify that package version is defined and adheres to current milestone target."""
     assert hasattr(shyam, "__version__")
-    assert shyam.__version__ == "0.12.0"
-
+    assert shyam.__version__ == "0.15.0"
