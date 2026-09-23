@@ -1,10 +1,11 @@
-﻿"""Shyam Core Runtime orchestrator with S12 Ecosystem Context, S13 Identity/Trust & S14 Peer Sync."""
+"""Shyam Core Runtime orchestrator with S12 Ecosystem Context, S13 Identity/Trust, S14 Peer Sync & S15 Bootstrap."""
 
 import asyncio
 import logging
 from types import TracebackType
 from typing import Any, Self
 
+from shyam.bootstrap import BootstrapService
 from shyam.capabilities.model import AvailabilityStatus, Capability
 from shyam.capabilities.registry import CapabilityRegistry
 from shyam.composite import (
@@ -66,7 +67,7 @@ logger = logging.getLogger("shyam.runtime")
 
 
 class ShyamRuntime:
-    """Standalone, local-first runtime core for Shyam with S13 Trust and S14 Peer Synchronization."""
+    """Standalone, local-first runtime core for Shyam with S13 Trust, S14 Peer Sync & S15 Bootstrap."""
 
     def __init__(self, settings: ShyamSettings | None = None) -> None:
         self.settings = settings or ShyamSettings()
@@ -94,6 +95,9 @@ class ShyamRuntime:
 
         # S14 Sync Service (initialized in start() when identity/keypair are loaded)
         self.sync_service: SyncService | None = None
+
+        # S15 Bootstrap Service (initialized in start())
+        self.bootstrap_service: BootstrapService | None = None
 
         # Instantiate the S9 Hybrid Navigator
         self.navigator = HybridNavigator()
@@ -168,6 +172,13 @@ class ShyamRuntime:
             raise RuntimeError("SyncService is not initialized. Runtime must be started first.")
         return self.sync_service
 
+    @property
+    def bootstrap(self) -> BootstrapService:
+        """Access the S15 Device Bootstrap & Recovery Service."""
+        if self.bootstrap_service is None:
+            raise RuntimeError("BootstrapService is not initialized. Runtime must be started first.")
+        return self.bootstrap_service
+
     async def get_ecosystem_snapshot(self) -> EcosystemSnapshot:
         """Return the current normalized view of the ecosystem (S8)."""
         if self.ecosystem:
@@ -211,7 +222,7 @@ class ShyamRuntime:
         return await self.workflow_engine.run(workflow, cancellation_token)
 
     async def start(self) -> None:
-        """Initialize and start the Shyam runtime with S13 identity & S14 sync setup."""
+        """Initialize and start the Shyam runtime with S13 identity, S14 sync & S15 bootstrap setup."""
         async with self._lock:
             if self.state.status != LifecycleState.CREATED:
                 raise InvalidStateTransitionError(
@@ -259,6 +270,14 @@ class ShyamRuntime:
                     local_node_id=identity.node_id,
                     keypair=self.keypair,
                     trust_service=self.trust_service,
+                    event_bus=self.events,
+                )
+
+                # S15: Device Bootstrap & Recovery Service initialization
+                self.bootstrap_service = BootstrapService(
+                    identity_manager=self.identity_manager,
+                    trust_service=self.trust_service,
+                    sync_service_getter=lambda: self.sync_service,
                     event_bus=self.events,
                 )
 
