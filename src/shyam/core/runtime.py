@@ -53,6 +53,7 @@ from shyam.providers.flux.provider import FluxProvider
 from shyam.providers.registry import ProviderRegistry
 from shyam.providers.zarya.provider import ZaryaProvider
 from shyam.sync import SyncService
+from shyam.continuity import ContinuityService
 from shyam.trust import RelationshipType, TrustRecord, TrustService, TrustStatus
 
 # S10 Workflow subsystem imports
@@ -98,6 +99,8 @@ class ShyamRuntime:
 
         # S15 Bootstrap Service (initialized in start())
         self.bootstrap_service: BootstrapService | None = None
+        # S16 Continuity Service (initialized in start())
+        self.continuity_service: ContinuityService | None = None
 
         # Instantiate the S9 Hybrid Navigator
         self.navigator = HybridNavigator()
@@ -278,6 +281,16 @@ class ShyamRuntime:
                     identity_manager=self.identity_manager,
                     trust_service=self.trust_service,
                     sync_service_getter=lambda: self.sync_service,
+                    event_bus=self.events,
+                )
+
+                # S16: Continuity Service initialization
+                self.continuity_service = ContinuityService(
+                    navigator=self.navigator,
+                    trust_service=self.trust_service,
+                    flux_provider=self.flux_provider,
+                    zarya_provider=self.zarya_provider,
+                    ecosystem_registry=self.ecosystem_registry,
                     event_bus=self.events,
                 )
 
