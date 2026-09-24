@@ -30,6 +30,7 @@ from shyam.providers.zarya.models import (
     IdentityResponse,
     StatusResponse,
     WorkExecuteResponse,
+    ContinuationResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -183,3 +184,37 @@ class ZaryaProvider:
             )
 
         return self._client.execute_work(tool, args)
+
+    def continue_work(
+        self,
+        portable_work: dict[str, Any],
+        source_device_id: str = "",
+        continuity_id: str = "",
+    ) -> ContinuationResponse:
+        """Invoke Zarya N4 continue_portable_work on this target.
+
+        Delegates to the underlying ZaryaClient.continue_work().
+        Requires an active connection.
+
+        Args:
+            portable_work: PortableWork dict from Zarya N3.
+            source_device_id: S13 device ID of the source node.
+            continuity_id: S16 continuity attempt ID.
+
+        Returns:
+            ContinuationResponse with outcome and execution details.
+
+        Raises:
+            ZaryaConnectionError: If not connected.
+            ZaryaClientError: On transport/protocol errors.
+        """
+        if not self._is_connected:
+            raise ZaryaConnectionError(
+                "ZaryaProvider is not connected.",
+            )
+
+        return self._client.continue_work(
+            portable_work=portable_work,
+            source_device_id=source_device_id,
+            continuity_id=continuity_id,
+        )
