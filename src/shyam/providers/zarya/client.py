@@ -35,6 +35,8 @@ from shyam.providers.zarya.models import (
     WorkExecuteRequest,
     WorkExecuteResponse,
     WorkStatusResponse,
+    ContinuationRequest,
+    ContinuationResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -247,3 +249,34 @@ class ZaryaClient:
         """GET /ecosystem/v1/work/status/{operation_id}."""
         data = self._request("GET", f"/work/status/{operation_id}")
         return WorkStatusResponse.model_validate(data)
+
+    # ── N4 Continuation (S16) ────────────────────────────────
+
+    def continue_work(
+        self,
+        portable_work: dict[str, Any],
+        source_device_id: str = "",
+        continuity_id: str = "",
+    ) -> ContinuationResponse:
+        """POST /ecosystem/v1/work/continue.
+
+        Invokes Zarya N4 continue_portable_work on the target node.
+        The target's internal pipeline (VALIDATE -> SUPPORT_CHECK ->
+        RESOLVE -> AUTHORIZE -> RECONSTRUCT -> EXECUTE) runs inside
+        Zarya. This client only sends the request and parses the
+        response.
+
+        Note: HTTP 200 does not equal continuation success.
+        Inspect the outcome field.
+        """
+        req_model = ContinuationRequest(
+            portable_work=portable_work,
+            source_device_id=source_device_id,
+            continuity_id=continuity_id,
+        )
+        data = self._request(
+            "POST",
+            "/work/continue",
+            data=req_model.model_dump(),
+        )
+        return ContinuationResponse.model_validate(data)

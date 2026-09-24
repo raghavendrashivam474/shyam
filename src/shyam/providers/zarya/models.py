@@ -176,3 +176,63 @@ class EcosystemErrorEnvelope(BaseModel):
     """
 
     error: EcosystemErrorDetail
+
+
+# ── N4 Continuation Models (S16) ─────────────────────────────
+
+
+class ContinuationRequest(BaseModel):
+    """POST /ecosystem/v1/work/continue request body.
+
+    Carries the PortableWork representation from Zarya N3.
+    S16 does not interpret the internal structure.
+    """
+
+    portable_work: dict[str, Any] = Field(
+        ...,
+        description="PortableWork dict from Zarya N3.",
+    )
+    source_device_id: str = Field(
+        default="",
+        description="Device ID of the source node.",
+    )
+    continuity_id: str = Field(
+        default="",
+        description="S16 continuity attempt ID for correlation.",
+    )
+
+
+class ContinuationResponse(BaseModel):
+    """POST /ecosystem/v1/work/continue response body.
+
+    Maps to Zarya N4's internal pipeline:
+    VALIDATE -> SUPPORT_CHECK -> RESOLVE -> AUTHORIZE ->
+    RECONSTRUCT -> EXECUTE -> OUTCOME
+
+    S16 preserves the outcome without interpreting S18 internals.
+    """
+
+    operation_id: str = Field(
+        default="",
+        description="Target-side Zarya operation ID.",
+    )
+    outcome: VerificationOutcome = Field(
+        default=VerificationOutcome.UNKNOWN,
+        description="S18 execution outcome.",
+    )
+    reconstruction_completed: bool = Field(
+        default=False,
+        description="Whether N4 reconstruction succeeded.",
+    )
+    execution_completed: bool = Field(
+        default=False,
+        description="Whether N4 execution completed.",
+    )
+    result: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Execution result payload.",
+    )
+    summary: str = Field(
+        default="",
+        description="Human-readable summary.",
+    )
