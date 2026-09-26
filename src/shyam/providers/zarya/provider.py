@@ -1,4 +1,4 @@
-"""Zarya Provider Implementation - S6.
+﻿"""Zarya Provider Implementation - S6.
 
 Represents a running Zarya sovereign instance as a Shyam Provider.
 Handles connection, protocol validation, capability discovery, and
@@ -190,24 +190,39 @@ class ZaryaProvider:
         portable_work: dict[str, Any],
         source_device_id: str = "",
         continuity_id: str = "",
+        target_url: str | None = None,
     ) -> ContinuationResponse:
-        """Invoke Zarya N4 continue_portable_work on this target.
+        """Invoke Zarya N4 continue_portable_work on this target or a remote target_url.
 
         Delegates to the underlying ZaryaClient.continue_work().
-        Requires an active connection.
+        If target_url is provided, routes to that target.
 
         Args:
             portable_work: PortableWork dict from Zarya N3.
             source_device_id: S13 device ID of the source node.
             continuity_id: S16 continuity attempt ID.
+            target_url: Optional remote Zarya EIP-1 base URL.
 
         Returns:
             ContinuationResponse with outcome and execution details.
 
         Raises:
-            ZaryaConnectionError: If not connected.
+            ZaryaConnectionError: If not connected and no target_url.
             ZaryaClientError: On transport/protocol errors.
         """
+        if target_url:
+            from shyam.providers.zarya.client import ZaryaClient
+            # Create a target-aware client using the same token
+            client = ZaryaClient(
+                base_url=target_url,
+                token=self._client.token,
+            )
+            return client.continue_work(
+                portable_work=portable_work,
+                source_device_id=source_device_id,
+                continuity_id=continuity_id,
+            )
+
         if not self._is_connected:
             raise ZaryaConnectionError(
                 "ZaryaProvider is not connected.",
