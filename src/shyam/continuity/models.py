@@ -1,4 +1,4 @@
-"""S16 Continuity domain models.
+﻿"""S16 Continuity domain models.
 
 Frozen Pydantic models for continuity requests, targets, sessions,
 and results. Strict identity separation per ADR-015.
@@ -52,7 +52,7 @@ class ContinuityRequest(BaseModel):
 
     The portable_work field carries the Zarya N3 PortableWork
     representation as a plain dict. S16 does not interpret its
-    internal structure — it passes it through to target Zarya N4.
+    internal structure â€” it passes it through to target Zarya N4.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -106,7 +106,7 @@ class ContinuityRequest(BaseModel):
 class ContinuityTarget(BaseModel):
     """Represents the selected target for continuity.
 
-    References existing ecosystem identities — does not invent new ones.
+    References existing ecosystem identities â€” does not invent new ones.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -127,6 +127,14 @@ class ContinuityTarget(BaseModel):
         default=False,
         description="Whether S13 trust has been verified for this target.",
     )
+    flux_peer_id: str | None = Field(
+        default=None,
+        description="Flux peer identity for artifact transfer (resolved from ecosystem metadata).",
+    )
+    zarya_url: str | None = Field(
+        default=None,
+        description="Remote Zarya EIP-1 base URL for cross-node continuation.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +145,7 @@ class ContinuityResult(BaseModel):
     """What S16 knows about the outcome of a continuity attempt.
 
     Critical: this is NOT the same as Zarya S18 execution outcome.
-    S16 preserves uncertainty — never converts reconstruction success
+    S16 preserves uncertainty â€” never converts reconstruction success
     into work completion.
     """
 
