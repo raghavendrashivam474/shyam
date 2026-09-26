@@ -391,12 +391,24 @@ class ShyamRuntime:
 
                 # Start UDP Discovery Service if enabled
                 if self.settings.discovery_enabled:
+                    def _get_discovery_metadata() -> dict[str, Any]:
+                        meta: dict[str, Any] = {}
+                        if self.settings.zarya_enabled and self.settings.zarya_url:
+                            meta["zarya_url"] = self.settings.zarya_url
+                            meta["has_zarya"] = True
+                        if self.settings.flux_enabled and self.settings.flux_url:
+                            meta["flux_url"] = self.settings.flux_url
+                            if self.flux_provider and self.flux_provider.peer_id:
+                                meta["flux_peer_id"] = self.flux_provider.peer_id
+                        return meta
+
                     self.discovery = DiscoveryService(
                         identity_manager=self.identity_manager,
                         event_bus=self.events,
                         broadcast_port=self.settings.discovery_port,
                         broadcast_interval=(self.settings.discovery_interval),
                         peer_expiry_interval=(self.settings.discovery_expiry),
+                        metadata_provider=_get_discovery_metadata,
                     )
                     await self.discovery.start()
 
