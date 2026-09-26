@@ -1,13 +1,11 @@
-"""Unit tests for S16 ContinuityService orchestration pipeline."""
+﻿"""Unit tests for S16 ContinuityService orchestration pipeline."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from shyam.capabilities.model import AvailabilityStatus
 from shyam.discovery.ecosystem_models import EcosystemNodeState
-from shyam.continuity.errors import (
-    DuplicateContinuityError,
-)
+from shyam.continuity.errors import DuplicateContinuityError
 from shyam.continuity.models import (
     ContinuityOutcome,
     ContinuityRequest,
@@ -47,7 +45,7 @@ def mock_zarya() -> MagicMock:
 @pytest.fixture
 def mock_registry() -> MagicMock:
     reg = MagicMock()
-    reg.snapshot = MagicMock()
+    reg.create_snapshot.return_value = MagicMock()
     return reg
 
 
@@ -128,10 +126,12 @@ async def test_successful_continuity_pipeline(
     )
 
     # 2. Mock Trust (S13)
-    mock_trust.get_relationship.return_value = TrustRecord(
-        node_id="node-target",
-        relationship_type=RelationshipType.PEER,
-        status=TrustStatus.TRUSTED,
+    mock_trust.get_record = AsyncMock(
+        return_value=TrustRecord(
+            node_id="node-target",
+            relationship=RelationshipType.PEER,
+            status=TrustStatus.TRUSTED,
+        )
     )
 
     # 3. Mock Flux (Transfer)
@@ -164,7 +164,7 @@ async def test_successful_continuity_pipeline(
 
     # Verify coordinator dependency calls
     mock_navigator.navigate.assert_called_once()
-    mock_trust.get_relationship.assert_called_with("node-target")
+    mock_trust.get_record.assert_awaited_with("node-target")
     mock_flux.transfer.assert_called_with("node-target", "/data/file1.txt")
     mock_zarya.continue_work.assert_called_with(
         {"type": "shell_script", "script": "echo 1"},
@@ -228,8 +228,14 @@ async def test_trust_verification_failure(
         selected=candidate,
     )
 
-    # Return None relationship (untrusted)
-    mock_trust.get_relationship.return_value = None
+    # Return UNKNOWN relationship (untrusted)
+    mock_trust.get_record = AsyncMock(
+        return_value=TrustRecord(
+            node_id="untrusted-node",
+            relationship=RelationshipType.NONE,
+            status=TrustStatus.UNKNOWN,
+        )
+    )
 
     session = await service.request_continuity(req)
     assert session.state == ContinuityState.FAILED
@@ -255,10 +261,12 @@ async def test_flux_transfer_failure(
         capability="zarya.work.continue",
         selected=candidate,
     )
-    mock_trust.get_relationship.return_value = TrustRecord(
-        node_id="target",
-        relationship_type=RelationshipType.PEER,
-        status=TrustStatus.TRUSTED,
+    mock_trust.get_record = AsyncMock(
+        return_value=TrustRecord(
+            node_id="target",
+            relationship=RelationshipType.PEER,
+            status=TrustStatus.TRUSTED,
+        )
     )
 
     # Flux raises error
@@ -287,10 +295,12 @@ async def test_target_continuation_failure_or_rejection(
         capability="zarya.work.continue",
         selected=candidate,
     )
-    mock_trust.get_relationship.return_value = TrustRecord(
-        node_id="target",
-        relationship_type=RelationshipType.PEER,
-        status=TrustStatus.TRUSTED,
+    mock_trust.get_record = AsyncMock(
+        return_value=TrustRecord(
+            node_id="target",
+            relationship=RelationshipType.PEER,
+            status=TrustStatus.TRUSTED,
+        )
     )
 
     mock_zarya.continue_work.side_effect = Exception("Reconstruction signature mismatch")
@@ -318,10 +328,12 @@ async def test_conservative_verification_uncertainty(
         capability="zarya.work.continue",
         selected=candidate,
     )
-    mock_trust.get_relationship.return_value = TrustRecord(
-        node_id="target",
-        relationship_type=RelationshipType.PEER,
-        status=TrustStatus.TRUSTED,
+    mock_trust.get_record = AsyncMock(
+        return_value=TrustRecord(
+            node_id="target",
+            relationship=RelationshipType.PEER,
+            status=TrustStatus.TRUSTED,
+        )
     )
 
     # Target returns UNKNOWN outcome

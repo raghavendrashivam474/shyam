@@ -1,14 +1,4 @@
-"""S16 Continuity Service — Cross-Device Work Continuity Coordinator.
-
-Orchestrates work continuation across trusted Shyam nodes by
-coordinating S9 (navigation), S13 (trust), Flux (transfer),
-and Zarya N4 (continuation).
-
-This is NOT an execution engine, transfer engine, or navigator.
-It is the coordination bridge between sovereign subsystems.
-"""
-
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import logging
@@ -37,6 +27,7 @@ from shyam.continuity.state import (
 )
 from shyam.navigation.models import NavigationRequest
 from shyam.providers.zarya.models import VerificationOutcome
+from shyam.trust.models import TrustStatus
 
 if TYPE_CHECKING:
     from shyam.discovery.ecosystem_registry import EcosystemRegistry
@@ -92,7 +83,7 @@ class ContinuityService:
         """Retrieve a continuity session by ID."""
         return self._sessions.get(continuity_id)
 
-    # ── Public API ────────────────────────────────────────────
+    # ── Public API ──────────────────────────────────────────────────────────
 
     async def request_continuity(
         self,
@@ -157,7 +148,7 @@ class ContinuityService:
 
         return session
 
-    # ── Pipeline stages ───────────────────────────────────────
+    # ── Pipeline stages ──────────────────────────────────────────────────
 
     async def _run_pipeline(
         self,
@@ -241,7 +232,7 @@ class ContinuityService:
         req = session.request
 
         try:
-            snapshot = self._registry.snapshot
+            snapshot = self._registry.create_snapshot()
             nav_request = NavigationRequest(
                 capability="zarya.work.continue",
                 constraints=req.target_constraints,
@@ -283,17 +274,16 @@ class ContinuityService:
             return self._fail(session, "No target selected")
 
         try:
-            trust_record = self._trust.get_relationship(
+            trust_record = await self._trust.get_record(
                 session.target.device_id,
             )
 
-            if trust_record is None:
+            if trust_record is None or trust_record.status == TrustStatus.UNKNOWN:
                 return self._fail(
                     session,
                     f"No trust relationship with {session.target.device_id}",
                 )
 
-            from shyam.trust.models import TrustStatus
             if trust_record.status != TrustStatus.TRUSTED:
                 return self._fail(
                     session,
@@ -478,7 +468,7 @@ class ContinuityService:
                 result=final_result,
             )
 
-    # ── Helpers ───────────────────────────────────────────────
+    # ── Helpers ──────────────────────────────────────────────────────────
 
     def _transition(
         self,
