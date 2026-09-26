@@ -1,15 +1,14 @@
-﻿"""Ecosystem Discovery Service - S8.
+﻿"""Ecosystem Discovery Service (S8).
 
-Collects, normalizes, and reconciles discovery data across the Shyam node,
-Local Provider Fabric, Zarya sovereign agent, and Flux Gateway peers.
+Normalizes local providers (S5 Fabric, S6 Zarya, S7 Flux) and remote UDP peers
+into unified DiscoveredNode and DiscoveredProvider domain models.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from shyam.capabilities.model import AvailabilityStatus, Capability
@@ -23,7 +22,7 @@ from shyam.discovery.ecosystem_models import (
 )
 from shyam.discovery.ecosystem_registry import EcosystemRegistry
 from shyam.discovery.model import Peer
-from shyam.identity.model import NodeIdentity
+from shyam.events.bus import EventBus
 from shyam.providers.flux.models import FluxPeerInfo
 from shyam.providers.flux.provider import FluxProvider
 from shyam.providers.model import Provider
@@ -31,16 +30,14 @@ from shyam.providers.registry import ProviderRegistry
 from shyam.providers.zarya.provider import ZaryaProvider
 
 if TYPE_CHECKING:
-    from shyam.events.bus import EventBus
+    from shyam.identity import NodeIdentity
 
-logger = logging.getLogger("shyam.discovery.ecosystem")
+logger = logging.getLogger(__name__)
 
 
 class EcosystemDiscoveryService:
-    """Orchestrates multi-source ecosystem discovery and normalization.
-
-    Aggregates local provider fabric state, sovereign Zarya capabilities,
-    Flux mesh peers, and UDP peer announcements into an EcosystemRegistry.
+    """Aggregates local provider fabric state, sovereign Zarya capabilities,
+    Flux gateway transports, and remote UDP announcements into the Ecosystem Registry.
     """
 
     def __init__(
@@ -55,18 +52,18 @@ class EcosystemDiscoveryService:
         stale_threshold_secs: float = 30.0,
     ) -> None:
         self.local_identity = local_identity
+        self.local_node_id = str(local_identity.node_id)
         self.providers = provider_registry
         self.capabilities = capability_registry
         self.registry = ecosystem_registry or EcosystemRegistry(event_bus=event_bus)
         self.zarya_provider = zarya_provider
         self.flux_provider = flux_provider
         self._event_bus = event_bus
-        self._stale_threshold_secs = stale_threshold_secs
+        self.stale_threshold_secs = stale_threshold_secs
 
-    @property
-    def local_node_id(self) -> str:
-        """Return the string identifier of the local node."""
-        return str(self.local_identity.node_id)
+    # -------------------------------------------------------------------------
+    # Local Node Normalization
+    # -------------------------------------------------------------------------
 
     async def discover_local_node(self) -> DiscoveredNode:
         """Collect and normalize local node providers and capabilities."""
@@ -140,6 +137,10 @@ class EcosystemDiscoveryService:
 
         await self.registry.register_node(local_node, overwrite=True)
         return local_node
+
+    # -------------------------------------------------------------------------
+    # Remote Peer Ingestion
+    # -------------------------------------------------------------------------
 
     async def ingest_flux_peers(self) -> list[DiscoveredNode]:
         """Poll Flux Gateway peer discovery and normalize peers as ecosystem nodes."""
@@ -216,20 +217,45 @@ class EcosystemDiscoveryService:
         first_seen = existing.first_seen if existing else peer.discovered_at
 
         # Remote Shyam peer offers runtime inspect capability
-        inspect_cap = DiscoveredCapability(
-            capability_id="shyam.runtime.inspect",
-            name="Runtime Introspection",
-            availability=AvailabilityStatus.AVAILABLE,
-        )
+        capabilities = [
+            DiscoveredCapability(
+                capability_id="shyam.runtime.inspect",
+                name="Runtime Introspection",
+                availability=AvailabilityStatus.AVAILABLE,
+            )
+        ]
+
+        # If peer advertises zarya_url or zarya capabilities, add continuity capability
+        providers_map: dict[str, DiscoveredProvider] = {}
+        if peer.metadata.get("zarya_url") or peer.metadata.get("has_zarya"):
+            zarya_cap = DiscoveredCapability(
+                capability_id="zarya.work.continue",
+                name="Zarya Work Continuation",
+                availability=AvailabilityStatus.AVAILABLE,
+            )
+            zarya_prov = DiscoveredProvider(
+                provider_id="zarya.agent",
+                name="Zarya Agent Provider",
+                version="1.0.0",
+                capabilities=(zarya_cap,),
+                status=AvailabilityStatus.AVAILABLE,
+                metadata={
+                    "zarya_url": peer.metadata.get("zarya_url"),
+                },
+                last_seen=peer.last_seen,
+            )
+            providers_map["zarya.agent"] = zarya_prov
+
         peer_prov = DiscoveredProvider(
             provider_id="shyam.peer",
             name="Remote Shyam Node",
             version=peer.protocol_version,
-            capabilities=(inspect_cap,),
+            capabilities=tuple(capabilities),
             status=AvailabilityStatus.AVAILABLE,
             metadata={"address": peer.address, "port": peer.port},
             last_seen=peer.last_seen,
         )
+        providers_map["shyam.peer"] = peer_prov
 
         disc_node = DiscoveredNode(
             node_id=node_id,
@@ -237,7 +263,7 @@ class EcosystemDiscoveryService:
             state=EcosystemNodeState.AVAILABLE,
             is_local=False,
             protocol_version=peer.protocol_version,
-            providers={"shyam.peer": peer_prov},
+            providers=providers_map,
             metadata={
                 "origin": "udp_broadcast",
                 "address": peer.address,
@@ -252,29 +278,27 @@ class EcosystemDiscoveryService:
         return disc_node
 
     async def handle_udp_peer_lost(self, node_id: UUID) -> None:
-        """Handle notification that a UDP peer was lost."""
+        """Mark a lost UDP peer as UNAVAILABLE in the registry."""
         node_id_str = str(node_id)
-        await self.registry.update_node_state(node_id_str, EcosystemNodeState.UNAVAILABLE)
+        node = self.registry.get_node(node_id_str)
+        if node and not node.is_local:
+            updated = node.with_state(EcosystemNodeState.UNAVAILABLE)
+            await self.registry.register_node(updated, overwrite=True)
+
+    # -------------------------------------------------------------------------
+    # High-level Orchestration
+    # -------------------------------------------------------------------------
 
     async def discover(self) -> EcosystemSnapshot:
-        """Execute a full discovery pass across all configured sources.
+        """Refresh and retrieve current unified ecosystem snapshot.
 
         1. Normalizes local node and providers.
-        2. Ingests Flux peers if connected.
-        3. Reconciles stale nodes.
-        4. Returns immutable snapshot.
+        2. Ingests reachable Flux Gateway peers.
+        3. Returns frozen snapshot.
         """
-        # 1. Local node
         await self.discover_local_node()
 
-        # 2. Flux mesh peers
         if self.flux_provider and self.flux_provider.is_connected:
             await self.ingest_flux_peers()
 
-        # 3. Staleness reconciliation
-        await self.registry.reconcile_stale(
-            stale_threshold_secs=self._stale_threshold_secs
-        )
-
-        # 4. Snapshot
         return self.registry.create_snapshot(local_node_id=self.local_node_id)

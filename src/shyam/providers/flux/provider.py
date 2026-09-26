@@ -75,6 +75,14 @@ class FluxProvider:
         """True if successfully connected and protocol validated."""
         return self._is_connected
 
+
+    @property
+    def peer_id(self) -> str | None:
+        """Return the Flux peer_id if connected, else None."""
+        if self._is_connected and self._identity:
+            return self._identity.peer_id
+        return None
+
     @property
     def descriptor(self) -> Provider:
         """Return the frozen Provider model for this Flux instance."""
