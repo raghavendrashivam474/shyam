@@ -246,10 +246,25 @@ class ContinuityService:
                 )
 
             selected = nav_result.selected
+            provider_meta = selected.metadata.get("provider", {}) if isinstance(selected.metadata.get("provider"), dict) else {}
+            node_meta = selected.metadata.get("node", {}) if isinstance(selected.metadata.get("node"), dict) else {}
+
+            flux_peer_id = (
+                selected.metadata.get("flux_peer_id")
+                or provider_meta.get("flux_peer_id")
+                or node_meta.get("flux_peer_id")
+            )
+            zarya_url = (
+                selected.metadata.get("zarya_url")
+                or provider_meta.get("zarya_url")
+                or node_meta.get("zarya_url")
+            )
             target = ContinuityTarget(
                 node_id=selected.node_id,
                 provider_id=selected.provider_id,
                 device_id=selected.node_id,  # S13 device mapping
+                flux_peer_id=flux_peer_id,
+                zarya_url=zarya_url,
             )
 
             # Rebuild session with target (frozen model)
@@ -343,10 +358,11 @@ class ContinuityService:
             last_transfer_id = None
 
             for artifact_path in req.artifact_paths:
+                transfer_target = session.target.flux_peer_id or session.target.node_id
                 transfer_result = await loop.run_in_executor(
                     None,
                     self._flux.transfer,
-                    session.target.node_id,
+                    transfer_target,
                     artifact_path,
                 )
                 last_transfer_id = getattr(
@@ -381,13 +397,23 @@ class ContinuityService:
 
         try:
             loop = asyncio.get_running_loop()
-            continuation_resp = await loop.run_in_executor(
-                None,
-                self._zarya.continue_work,
-                req.portable_work,
-                req.source_device_id,
-                session.continuity_id,
-            )
+            if session.target.zarya_url:
+                continuation_resp = await loop.run_in_executor(
+                    None,
+                    self._zarya.continue_work,
+                    req.portable_work,
+                    req.source_device_id,
+                    session.continuity_id,
+                    session.target.zarya_url,
+                )
+            else:
+                continuation_resp = await loop.run_in_executor(
+                    None,
+                    self._zarya.continue_work,
+                    req.portable_work,
+                    req.source_device_id,
+                    session.continuity_id,
+                )
 
             session = session.model_copy(
                 update={
