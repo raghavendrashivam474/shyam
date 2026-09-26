@@ -1,4 +1,4 @@
-"""Shyam Core Runtime orchestrator with S12 Ecosystem Context, S13 Identity/Trust, S14 Peer Sync & S15 Bootstrap."""
+﻿"""Shyam Core Runtime orchestrator with S12 Ecosystem Context, S13 Identity/Trust, S14 Peer Sync & S15 Bootstrap."""
 
 import asyncio
 import logging
@@ -63,9 +63,26 @@ from shyam.workflow.executors.flux import FluxExecutor
 from shyam.workflow.executors.local_fs import LocalFilesystemExecutor
 from shyam.workflow.executors.zarya import ZaryaExecutor
 from shyam.workflow.models import Workflow, WorkflowResult
+import socket
 
 logger = logging.getLogger("shyam.runtime")
 
+
+
+def _resolve_lan_url(url: str) -> str:
+    """Replace 127.0.0.1/localhost with the real LAN IP for cross-machine discovery."""
+    if "127.0.0.1" not in url and "localhost" not in url:
+        return url
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            lan_ip = s.getsockname()[0]
+        finally:
+            s.close()
+        return url.replace("127.0.0.1", lan_ip).replace("localhost", lan_ip)
+    except OSError:
+        return url
 
 class ShyamRuntime:
     """Standalone, local-first runtime core for Shyam with S13 Trust, S14 Peer Sync & S15 Bootstrap."""
@@ -394,10 +411,10 @@ class ShyamRuntime:
                     def _get_discovery_metadata() -> dict[str, Any]:
                         meta: dict[str, Any] = {}
                         if self.settings.zarya_enabled and self.settings.zarya_url:
-                            meta["zarya_url"] = self.settings.zarya_url
+                            meta["zarya_url"] = _resolve_lan_url(self.settings.zarya_url)
                             meta["has_zarya"] = True
                         if self.settings.flux_enabled and self.settings.flux_url:
-                            meta["flux_url"] = self.settings.flux_url
+                            meta["flux_url"] = _resolve_lan_url(self.settings.flux_url)
                             if self.flux_provider and self.flux_provider.peer_id:
                                 meta["flux_peer_id"] = self.flux_provider.peer_id
                         return meta
