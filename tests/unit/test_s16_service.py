@@ -371,3 +371,51 @@ async def test_idempotency_duplicate_blocking(
     # A duplicate request should be explicitly blocked without running the pipeline
     with pytest.raises(DuplicateContinuityError):
         await service.request_continuity(req)
+
+@pytest.mark.asyncio
+async def test_transfer_artifacts_fails_on_structured_failed_status(
+    service: ContinuityService,
+    mock_navigator: MagicMock,
+    mock_trust: MagicMock,
+    mock_flux: MagicMock,
+    mock_zarya: MagicMock,
+) -> None:
+    """Ensure structured FluxTransferStatus.FAILED causes clean continuity failure."""
+    req = ContinuityRequest(
+        work_id="work-fail-transfer-999",
+        source_device_id="device-source",
+        portable_work={"type": "shell_script", "script": "echo 1"},
+        artifact_paths=("/data/file1.txt",),
+    )
+
+    # 1. Target selection succeeds
+    candidate = _make_mock_candidate("node-target")
+    mock_navigator.navigate.return_value = NavigationResult(
+        capability="zarya.work.continue",
+        has_selection=True,
+        selected=candidate,
+        reason="Target match",
+    )
+
+    # 2. Trust verification succeeds
+    mock_trust.get_record = AsyncMock(
+        return_value=TrustRecord(
+            node_id="node-target",
+            relationship=RelationshipType.PEER,
+            status=TrustStatus.TRUSTED,
+        )
+    )
+
+    # 3. Flux transfer returns structured FAILED
+    mock_flux.transfer.return_value = FluxTransferResponse(
+        transfer_id="tx-failed-123",
+        status=FluxTransferStatus.FAILED,
+    )
+
+    session = await service.request_continuity(req)
+
+    assert session.state == ContinuityState.FAILED
+    assert session.result is not None
+    assert session.result.outcome == ContinuityOutcome.FAILED
+    assert "Artifact transfer failed with status: FAILED" in session.result.reason
+    mock_zarya.continue_work.assert_not_called()

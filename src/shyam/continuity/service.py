@@ -368,6 +368,14 @@ class ContinuityService:
                 last_transfer_id = getattr(
                     transfer_result, "transfer_id", None
                 )
+                status = getattr(transfer_result, "status", None)
+                status_val = getattr(status, "value", status)
+                if status_val in ("FAILED", "CANCELLED"):
+                    return self._fail(
+                        session,
+                        f"Artifact transfer failed with status: {status_val}",
+                        outcome=ContinuityOutcome.FAILED,
+                    )
 
             session = session.model_copy(
                 update={
