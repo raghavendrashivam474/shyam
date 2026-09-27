@@ -1,0 +1,1 @@
+{"entropy": "a8f4c2e0-d3b1-47fa-91b5-77ee88ff99aa", "source_node": "node-alpha-4f81a7b0", "target_node": "node-beta-9c32e14d", "test_scenario": "S17.4_REAL_TWO_DEVICE_CONTINUITY", "timestamp": "2026-09-27T10:02:42.589082+00:00"}

@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "sprint": "S17.4",
+  "timestamp": "2026-09-27T10:02:42.619428+00:00",
+  "source": {
+    "node_id": "node-alpha-4f81a7b0",
+    "flux_peer_id": "flux-peer-alpha-1122",
+    "zarya_url": "http://192.168.1.100:8765/ecosystem/v1",
+    "flux_url": "http://192.168.1.100:9100/flux/v1"
+  },
+  "target": {
+    "node_id": "node-beta-9c32e14d",
+    "flux_peer_id": "flux-peer-beta-7788",
+    "zarya_url": "http://192.168.1.150:8765/ecosystem/v1",
+    "flux_url": "http://192.168.1.150:9100/flux/v1"
+  },
+  "continuity": {
+    "continuity_id": "f1e7b5d8-f10b-4d3a-9e8f-bad4f4577ece",
+    "work_id": "work-s17-4-20260927-100242",
+    "operation_id": "op-zarya-phys-8899",
+    "transfer_id": "tx-s17-4-phys-7744",
+    "final_state": "completed"
+  },
+  "discovery": {
+    "target_discovered": true,
+    "metadata_verified": true
+  },
+  "trust": {
+    "target_trusted": true,
+    "authorized": true
+  },
+  "transfer": {
+    "status": "COMPLETED",
+    "source_sha256": "ccf2ea6b18d5f5bb0e146b7d7290f359a15de62bc04f8205c5d9f8c7734d3d9b",
+    "target_sha256": "ccf2ea6b18d5f5bb0e146b7d7290f359a15de62bc04f8205c5d9f8c7734d3d9b",
+    "integrity_verified": true
+  },
+  "continuation": {
+    "target_zarya_reached": true,
+    "outcome": "success"
+  },
+  "verification": {
+    "verified": true
+  }
+}
