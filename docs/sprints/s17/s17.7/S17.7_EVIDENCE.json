@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "sprint": "S17.7",
+  "timestamp": "2026-09-27T14:20:38.750659+00:00",
+  "human_input": "continue this work on my other laptop",
+  "surface_entry_point": "SurfaceCoordinator.handle_request()",
+  "source_node_id": "4573496a-1bb3-4e06-a5e4-7426f9242d3a",
+  "target_node_id": "da3aaf29-8f57-411a-99a3-7d15bc921f02",
+  "intent": "CONTINUE_WORK",
+  "readiness": "ready",
+  "trust_verified": true,
+  "flux_transfer": "COMPLETED",
+  "zarya_continuation": "VERIFIED_SUCCESS",
+  "surface_outcome": "completed",
+  "surface_message": "Done \u2014 work continued on your other laptop.",
+  "verification": "VERIFIED",
+  "correlation_chain": {
+    "interaction_id": "6347a08b-290f-4ed6-b5d8-c26383e67110",
+    "continuity_id": "0c7b3039-34a7-4e94-ac97-82e0d3c2d78a",
+    "work_id": "work-active-surface",
+    "operation_id": "op-zarya-continuation-s17-7",
+    "transfer_id": null
+  }
+}
