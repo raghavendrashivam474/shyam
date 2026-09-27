@@ -1,4 +1,4 @@
-﻿"""Command-line interface for starting and managing Shyam runtime."""
+"""Command-line interface for starting and managing Shyam runtime."""
 
 from __future__ import annotations
 
@@ -129,11 +129,21 @@ async def run_runtime(
 def main() -> None:
     """Synchronous entry point for CLI executions."""
     parser = argparse.ArgumentParser(description="Shyam Runtime & Surface Interface")
+    parser.add_argument("--ui", action="store_true", help="Launch visual Shyam desktop surface")
     parser.add_argument("-i", "--interactive", action="store_true", help="Start interactive surface interface")
     parser.add_argument("-c", "--command", type=str, help="Execute a single surface command")
     parser.add_argument("-d", "--duration", type=float, help="Run for duration in seconds and exit")
 
     args = parser.parse_args()
+
+    if args.ui:
+        from shyam.ui.app import ShyamUIApp
+        app = ShyamUIApp()
+        try:
+            app.start()
+        except KeyboardInterrupt:
+            app.stop()
+        return
 
     try:
         asyncio.run(
