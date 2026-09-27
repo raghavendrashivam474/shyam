@@ -70,6 +70,11 @@ class ShyamSettings(BaseModel):
         default="http://127.0.0.1:9100/flux/v1",
         description="Flux Gateway API base URL.",
     )
+    readiness_poll_interval: float = Field(
+        default=3.0,
+        description="Interval in seconds for polling component readiness.",
+    )
+
 
     model_config = {
         "frozen": True,

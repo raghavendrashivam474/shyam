@@ -20,6 +20,12 @@ from shyam.context import (
     EcosystemStateStore,
 )
 from shyam.core.config import ShyamSettings
+from shyam.core.readiness import (
+    ComponentState,
+    EcosystemReadiness,
+    EcosystemReadinessSnapshot,
+    ReadinessTracker,
+)
 from shyam.core.lifecycle import InvalidStateTransitionError, LifecycleState
 from shyam.core.logging import setup_logging
 from shyam.core.state import RuntimeState
@@ -144,6 +150,16 @@ class ShyamRuntime:
         self.executor_registry.register("local.filesystem", LocalFilesystemExecutor())
         self.executor_registry.register("zarya.sovereign", ZaryaExecutor(self.zarya_provider))
         self.executor_registry.register("flux.connectivity", FluxExecutor(self.flux_provider))
+        self.readiness_tracker = ReadinessTracker(
+            event_bus=self.events,
+            zarya_provider=self.zarya_provider,
+            flux_provider=self.flux_provider,
+            provider_registry=self.providers,
+            capability_registry=self.capabilities,
+            poll_interval=self.settings.readiness_poll_interval,
+            zarya_enabled=self.settings.zarya_enabled,
+            flux_enabled=self.settings.flux_enabled,
+        )
 
         self.workflow_engine = WorkflowEngine(
             navigator_fn=self.navigate,
@@ -198,6 +214,15 @@ class ShyamRuntime:
         if self.bootstrap_service is None:
             raise RuntimeError("BootstrapService is not initialized. Runtime must be started first.")
         return self.bootstrap_service
+
+    @property
+    def readiness(self) -> EcosystemReadiness:
+        """Get current aggregate ecosystem readiness."""
+        return self.readiness_tracker.readiness
+
+    def get_readiness_snapshot(self) -> EcosystemReadinessSnapshot:
+        """Get current detailed component readiness snapshot."""
+        return self.readiness_tracker.get_snapshot()
 
     async def get_ecosystem_snapshot(self) -> EcosystemSnapshot:
         """Return the current normalized view of the ecosystem (S8)."""
@@ -447,6 +472,9 @@ class ShyamRuntime:
                 )
                 raise
 
+            self.readiness_tracker.set_node_ready()
+            await self.readiness_tracker.start()
+
             self.state.transition_to(LifecycleState.RUNNING)
             logger.info(
                 "Shyam runtime started [%s] in '%s'",
@@ -469,6 +497,14 @@ class ShyamRuntime:
                 "Stopping Shyam runtime [%s]...",
                 self.state.runtime_id,
             )
+
+            try:
+                await self.readiness_tracker.stop()
+            except Exception as exc:
+                logger.exception(
+                    "Failed to stop readiness tracker: %s",
+                    exc,
+                )
 
             # Stop the S12 Context Service first to clean up listeners
             try:
