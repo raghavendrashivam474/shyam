@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from shyam.continuity.models import ContinuityOutcome, ContinuityRequest
+from shyam.continuity.models import ContinuityOutcome, ContinuityRequest, ContinuityState
 from shyam.core.readiness import EcosystemReadiness, EcosystemReadinessChangedEvent
 from shyam.core.runtime import ShyamRuntime
 from shyam.navigation.models import NavigationConstraints
@@ -103,13 +103,22 @@ class SurfaceCoordinator:
         )
 
         try:
-            result = await self.runtime.continuity_service.request_continuity(continuity_req)
-            if result.outcome == ContinuityOutcome.SUCCESS:
+            res = await self.runtime.continuity_service.request_continuity(continuity_req)
+            outcome = None
+            if hasattr(res, "result") and res.result is not None:
+                outcome = getattr(res.result, "outcome", None)
+            elif hasattr(res, "outcome"):
+                outcome = getattr(res, "outcome", None)
+            elif getattr(res, "state", None) == ContinuityState.COMPLETED:
+                outcome = ContinuityOutcome.SUCCESS
+
+            if outcome == ContinuityOutcome.SUCCESS:
                 self.current_state = SurfaceState.COMPLETED
                 return self.presenter.success_response()
             else:
+                outcome_str = outcome.value if hasattr(outcome, "value") else str(outcome)
                 self.current_state = SurfaceState.FAILED
-                return self.presenter.failure_response(f"Continuity failed: {result.outcome}")
+                return self.presenter.failure_response(f"Continuity failed: {outcome_str}")
         except Exception as exc:
             logger.exception("Error executing continuity from surface: %s", exc)
             self.current_state = SurfaceState.FAILED
