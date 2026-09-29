@@ -94,11 +94,22 @@ class SurfaceCoordinator:
 
         # Build continuity request (defaulting to the active work slice)
         # Note: Portable work structure complies with Zarya / S16 specs
+        portable_work_payload = {
+            "format_version": "n3-portable-v1",
+            "work_id": "work-active-surface",
+            "intent": "continue_work",
+            "plan_reference": {"steps": [{"id": "step-1", "tool": "systemInfo", "args": {}, "unverified_ok": True, "description": "Continue active human task slice"}]},
+            "outcome": "IN_PROGRESS",
+            "lifecycle_status": "ACTIVE",
+            "platform": "windows",
+            "artifact_references": [],
+        }
+
         continuity_req = ContinuityRequest(
             work_id="work-active-surface",
             source_device_id=source_device_id,
-            portable_work={"source": "surface_request", "state": "active"},
-            target_constraints=NavigationConstraints(capability="execute"),
+            portable_work=portable_work_payload,
+            target_constraints=NavigationConstraints(capability="zarya.work.continue"),
             continuity_intent="COPY",
         )
 
