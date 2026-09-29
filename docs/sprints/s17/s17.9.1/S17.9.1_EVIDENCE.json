@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "sprint": "S17.9.1",
+  "timestamp": "2026-09-29T03:39:25.969475+00:00",
+  "source": {
+    "node_id": "1016583c-fc30-463c-8b33-5b3305276d94",
+    "zarya_url": "http://10.177.67.156:8765/ecosystem/v1",
+    "flux_url": "http://10.177.67.156:9100/flux/v1"
+  },
+  "target": {
+    "node_id": "d4d8d555-70d0-4bce-abca-7d041111af2b"
+  },
+  "discovery": {
+    "target_discovered": true,
+    "flux_peer_id": "d8e20019-0eb2-4329-b406-9b4e23ff0b9e",
+    "flux_url": "http://10.177.67.156:9100/flux/v1",
+    "zarya_url": "http://10.177.67.156:8765/ecosystem/v1"
+  },
+  "trust": {
+    "target_trusted": true,
+    "untrusted_rejected_verified": true
+  },
+  "surface": {
+    "entry_point": "SurfaceCoordinator.handle_request()",
+    "human_input": "continue this work on my other laptop",
+    "intent_parsed": "CONTINUE_WORK",
+    "response_message": "Done \u2014 work continued on your other laptop.",
+    "surface_state": "completed"
+  },
+  "continuity": {
+    "continuity_id": "6e8800a6-cc8e-4f31-bec4-fa29411da48f",
+    "work_id": "work-active-surface",
+    "final_state": "completed",
+    "operation_id": "op-e333bb584dc8",
+    "transfer_id": null,
+    "outcome": "success",
+    "reason": "All steps completed and verified successfully.",
+    "transfer_completed": true
+  },
+  "integrity": {
+    "source_sha256": "8c30cba83da61eec9966c3ba5ce2f98d0c15e7293bf7ad80c17b6cb991dcbd42",
+    "target_sha256": "8c30cba83da61eec9966c3ba5ce2f98d0c15e7293bf7ad80c17b6cb991dcbd42",
+    "hash_matched": true
+  },
+  "verification": {
+    "verified": true
+  },
+  "correlation_chain": {
+    "interaction_id": "cd59f489-ee54-4cf1-92c9-06a63b754b3a",
+    "continuity_id": "6e8800a6-cc8e-4f31-bec4-fa29411da48f",
+    "operation_id": "op-e333bb584dc8"
+  },
+  "errors": []
+}
